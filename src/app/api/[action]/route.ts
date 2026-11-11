@@ -33,6 +33,18 @@ function equalSecret(left: string, right: string): boolean {
   return a.length === b.length && b.length >= 32 && timingSafeEqual(a, b);
 }
 
+function hasTrustedOrigin(request: NextRequest): boolean {
+  const expected = appOrigin();
+  const origin = request.headers.get('origin');
+  if (origin === expected) return true;
+  if (origin !== 'null') return false;
+
+  // Safari can serialize an opaque document origin as "null" on form navigation.
+  // Accept it only when Fetch Metadata confirms same-origin and Host matches this install.
+  return request.headers.get('sec-fetch-site') === 'same-origin'
+    && request.headers.get('host') === new URL(expected).host;
+}
+
 async function form(request: NextRequest): Promise<URLSearchParams> {
   if (!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded')) {
     throw new InputError('invalid');
@@ -118,7 +130,7 @@ export async function GET(_: NextRequest, context: { params: Promise<{ action: s
 export async function POST(request: NextRequest, context: { params: Promise<{ action: string }> }) {
   const { action } = await context.params;
   const wantsJson = request.headers.get('accept')?.includes('application/json') ?? false;
-  if (request.headers.get('origin') !== appOrigin()) return NextResponse.json({ error: 'origin' }, { status: 403 });
+  if (!hasTrustedOrigin(request)) return NextResponse.json({ error: 'origin' }, { status: 403 });
 
   const currentToken = request.cookies.get(cookieName)?.value;
   let errorPath = '/';
