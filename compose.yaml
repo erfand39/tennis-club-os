@@ -64,6 +64,9 @@ services:
 
   app:
     image: sam-tennis-local-app
+    env_file:
+      - path: ./.local/push.env
+        required: false
     restart: unless-stopped
     depends_on:
       migrate:
@@ -84,6 +87,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    networks: [default, backend]
+
+  notifications:
+    image: sam-tennis-local-app
+    profiles: [push]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["node","scripts/push-worker.mjs"]
+    env_file:
+      - path: ./.local/push.env
+        required: false
+    environment:
+      SAM_DATABASE_URL: postgres://tennis_web:${SAM_WEB_DB_PASSWORD}@db:5432/postgres
     networks: [default, backend]
 
 networks:

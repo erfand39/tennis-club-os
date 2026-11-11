@@ -4,6 +4,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 settings="$root/.local/secrets.env"
+push_settings="$root/.local/push.env"
 umask 077
 
 docker compose version >/dev/null 2>&1 || {
@@ -12,7 +13,11 @@ docker compose version >/dev/null 2>&1 || {
 }
 
 compose() {
-  docker compose --env-file "$settings" "$@"
+  if [ -f "$push_settings" ]; then
+    docker compose --env-file "$settings" --profile push "$@"
+  else
+    docker compose --env-file "$settings" "$@"
+  fi
 }
 
 origin() {
@@ -63,7 +68,21 @@ case "${1:-up}" in
     ;;
   status) compose ps -a ;;
   stop) compose stop ;;
-  logs) compose logs --tail=120 app auth migrate ;;
+  logs)
+    if [ -f "$push_settings" ]; then compose logs --tail=120 app auth migrate notifications
+    else compose logs --tail=120 app auth migrate
+    fi ;;
+  push-setup)
+    [ "$#" -eq 2 ] || { printf '%s\n' 'Usage: ./scripts/local.sh push-setup mailto:manager@example.com' >&2; exit 2; }
+    [ ! -e "$push_settings" ] || { printf '%s\n' 'Push is already configured. Run ./scripts/local.sh up to restart it.' >&2; exit 1; }
+    temp=$(mktemp "$root/.local/.push.XXXXXX")
+    trap 'rm -f "$temp"' EXIT HUP INT TERM
+    compose run --rm --no-deps -T app node scripts/push-keygen.mjs "$2" > "$temp"
+    ln "$temp" "$push_settings"
+    rm -f "$temp"
+    trap - EXIT HUP INT TERM
+    compose up -d --no-build --pull never app notifications
+    ;;
   setup-code) sed -n 's/^SAM_SETUP_CODE=//p' "$settings" ;;
   recover)
     [ "$#" -eq 2 ] || { printf '%s\n' 'Usage: ./scripts/local.sh recover OWNER_EMAIL' >&2; exit 2; }
@@ -80,5 +99,5 @@ case "${1:-up}" in
     trap - EXIT HUP INT TERM
     printf '%s\n' "$final"
     ;;
-  *) printf '%s\n' 'Usage: ./scripts/local.sh {up|start|status|stop|logs|setup-code|recover|backup}' >&2; exit 2;;
+  *) printf '%s\n' 'Usage: ./scripts/local.sh {up|start|status|stop|logs|setup-code|recover|backup|push-setup}' >&2; exit 2;;
 esac

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 import pg from 'pg';
@@ -841,6 +841,129 @@ test('reports reconcile local periods, capacity, attendance, movements and expor
   metric(archived,'ظرفیت قابل استفاده','۹ ساعت');
   metric(archived,'خارج از بهره‌برداری','۳ ساعت');
   metric(archived,'نرخ اشغال رزروشده','۵٫۶٪');
+});
+
+test('installable shell is public while private pages and API responses stay no-store',async ()=>{
+  const home=await get('/');
+  const html=await home.text();
+  assert.match(html,/rel="manifest" href="\/pwa\/manifest.webmanifest"/);
+  assert.match(home.headers.get('cache-control'),/no-store/);
+  const chunk=html.match(/src="(\/_next\/static\/[^"]+\.js)"/)?.[1];
+  assert.ok(chunk);
+  const script=await get(chunk);
+  assert.equal(script.status,200);
+  assert.match(script.headers.get('cache-control'),/public.*immutable/);
+  const manifest=await get('/pwa/manifest.webmanifest');
+  assert.match(manifest.headers.get('content-type'),/application\/manifest\+json/);
+  const data=await manifest.json();
+  assert.equal(data.display,'standalone');
+  assert.equal(data.dir,'rtl');
+  for (const icon of data.icons) {
+    const response=await get('/pwa/'+icon.src);
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get('content-type'),'image/png');
+    const png=Buffer.from(await response.arrayBuffer());
+    const [width,height]=icon.sizes.split('x').map(Number);
+    assert.equal(png.readUInt32BE(16),width);
+    assert.equal(png.readUInt32BE(20),height);
+  }
+  const sw=await get('/sw.js');
+  assert.equal(sw.status,200);
+  assert.equal(sw.headers.get('service-worker-allowed'),'/');
+  assert.match(sw.headers.get('content-type'),/javascript/);
+  assert.match(sw.headers.get('cache-control'),/no-store/);
+  assert.match(await (await get('/pwa/offline.html')).text(),/اتصال به سامانه برقرار نیست/);
+  assert.equal((await get('/pwa/reports.json')).status,404);
+  assert.match((await get(`/club/${org}/notifications`,owner)).headers.get('cache-control'),/no-store/);
+});
+
+test('manager notifications respect branch scope, transactional reminders, read state and push leases',async ()=>{
+  const manager=identities.get('admin');
+  const managerCookie=sessionCookie(await post('login',{email:manager.email,password:`${password}-next`}));
+  const {rows:[actor]}=await db.query('select id from auth.users where email=$1',[ownerEmail]);
+  const one=async (sql,args)=>(await db.query(sql,args)).rows[0];
+  const court=await one('select id from public.courts where (organization_id,location_id)=($1,$2) limit 1',[org,branch]);
+  const otherCourt=await one('select id from public.courts where (organization_id,location_id)=($1,$2) limit 1',[org,secondBranch]);
+  const makeLesson=async (location,id)=>one(`
+    insert into public.bookings(organization_id,location_id,court_id,slot,timezone,kind,created_by)
+    values ($1,$2,$3,tstzrange(now()+interval '30 minutes',now()+interval '90 minutes','[)'),'Asia/Tehran','group',$4)
+    returning id`,[org,location,id,actor.id]);
+  const ec=createECDH('prime256v1');
+  ec.generateKeys();
+  const keys={p256dh:ec.getPublicKey('base64url','uncompressed'),auth:randomBytes(16).toString('base64url')};
+  const endpoint='https://fcm.googleapis.com/fcm/send/'+randomUUID();
+  const pushCookieResponse=await post('notice-push',{org,subscription:JSON.stringify({endpoint,keys})},managerCookie);
+  let device;
+  if (process.env.SAM_PUSH_PUBLIC_KEY) {
+    assert.equal(pushCookieResponse.status,200,await pushCookieResponse.text());
+    assert.match(pushCookieResponse.headers.get('set-cookie'),/sam_push_device=.+HttpOnly/);
+    device=await one('select id from tennis_runtime.push_devices where endpoint=$1',[endpoint]);
+    const invalid=await post('notice-push',{org,subscription:JSON.stringify({endpoint:'https://127.0.0.1/test',keys})},managerCookie);
+    assert.equal(invalid.status,400);
+  } else {
+    assert.equal(pushCookieResponse.status,503);
+    device=await one(`insert into tennis_runtime.push_devices(organization_id,user_id,endpoint,p256dh,auth_key)
+      values ($1,$2,$3,$4,$5) returning id`,[org,manager.id,endpoint,keys.p256dh,keys.auth]);
+  }
+  const sessionDevice=managerCookie+'; sam_push_device='+device.id;
+  const loan=await makeLesson(branch,court.id);
+  const other=await makeLesson(secondBranch,otherCourt.id);
+  const event=await one("select id from public.notification_events where source_id=$1 and kind='lesson_reminder'",[loan.id]);
+  const foreign=await one("select id from public.notification_events where source_id=$1 and kind='lesson_reminder'",[other.id]);
+  const path=`/club/${org}/notifications`;
+  const html=await (await get(path,managerCookie)).text();
+  assert.match(html,/یادآوری جلسه/);
+  assert.ok(html.includes('/calendar/'+loan.id));
+  assert.ok(!html.includes('/calendar/'+other.id));
+  assert.equal((await get(path+'?branch='+secondBranch,managerCookie)).status,404);
+  assert.equal((await get(path,undefined)).status,307);
+  assert.equal((await post('notice-read',{org,event:foreign.id},managerCookie)).status,404);
+  assert.equal((await post('notice-read',{org,event:event.id},managerCookie,'http://example.test')).status,403);
+  for (let index=0;index<2;index++) assert.equal((await post('notice-read',{org,event:event.id},managerCookie)).status,200);
+  assert.deepEqual(await one('select count(*)::int as marks from public.notification_reads where event_id=$1 and user_id=$2',[event.id,manager.id]),{marks:1});
+  assert.ok(!(await (await get(path,managerCookie)).text()).includes('name="event" value="'+event.id+'"'));
+  assert.ok((await (await get(path,owner)).text()).includes('name="event" value="'+event.id+'"'));
+
+  const otherConnection=new pg.Client({connectionString:databaseUrl});
+  await otherConnection.connect();
+  try {
+    await otherConnection.query('set role tennis_web');
+    const claims=await Promise.all([
+      db.query('select * from tennis_runtime.claim_push_deliveries(4)'),
+      otherConnection.query('select * from tennis_runtime.claim_push_deliveries(4)'),
+    ]);
+    const claimed=claims.flatMap(result=>result.rows).filter(row=>row.device_id===device.id);
+    assert.deepEqual(claimed.map(row=>row.event_id),[event.id]);
+    assert.equal(claimed[0].attempts,1);
+    assert.equal((await one("select tennis_runtime.finish_push_delivery($1,$2,$3,'sent') as done",[event.id,device.id,randomUUID()])).done,false);
+    assert.equal((await one("select tennis_runtime.finish_push_delivery($1,$2,$3,'sent') as done",[event.id,device.id,claimed[0].lease])).done,true);
+    assert.equal((await db.query('select * from tennis_runtime.claim_push_deliveries(4)')).rows.some(row=>row.event_id===event.id),false);
+  } finally {
+    await otherConnection.end();
+  }
+
+  await db.query(`update public.bookings set slot=tstzrange(lower(slot)+interval '10 minutes',upper(slot)+interval '10 minutes','[)')
+    where id=$1`,[loan.id]);
+  assert.ok((await one('select invalidated_at from public.notification_events where id=$1',[event.id])).invalidated_at);
+  const cancel=`update public.bookings set status='cancelled',cancelled_at=now(),cancellation_reason='آزمون اعلان' where id=$1`;
+  await db.query(cancel,[loan.id]);
+  await db.query(cancel,[loan.id]);
+  assert.equal((await one("select count(*)::int as count from public.notification_events where source_id=$1 and kind='booking_cancelled'",[loan.id])).count,1);
+  assert.equal((await one("select count(*)::int as count from public.notification_events where source_id=$1 and kind='lesson_reminder' and invalidated_at is null",[loan.id])).count,0);
+
+  const invoice=await one(`insert into public.invoices(organization_id,location_id,currency,total_amount_minor,issued_by,issued_at)
+    values ($1,$2,'IRR',1000,$3,now()-interval '8 days') returning id`,[org,branch,actor.id]);
+  assert.ok((await (await get(path,managerCookie)).text()).includes('/finance/'+invoice.id));
+  await db.query(`insert into public.payments(organization_id,location_id,invoice_id,method,amount_minor,received_by)
+    values ($1,$2,$3,'cash',1000,$4)`,[org,branch,invoice.id,actor.id]);
+  assert.ok(!(await (await get(path,managerCookie)).text()).includes('/finance/'+invoice.id));
+  assert.equal((await post('notice-disable',{org},sessionDevice)).status,200);
+  assert.equal(await one('select id from tennis_runtime.push_devices where id=$1',[device.id]),undefined);
+
+  const reenabled=await one(`insert into tennis_runtime.push_devices(organization_id,user_id,endpoint,p256dh,auth_key)
+    values ($1,$2,$3,$4,$5) returning id`,[org,manager.id,endpoint,keys.p256dh,keys.auth]);
+  assert.equal((await post('logout',{},managerCookie+'; sam_push_device='+reenabled.id)).status,303);
+  assert.equal(await one('select id from tennis_runtime.push_devices where id=$1',[reenabled.id]),undefined);
 });
 
 test('leaving preserves the audit trail and removes club access', async () => {

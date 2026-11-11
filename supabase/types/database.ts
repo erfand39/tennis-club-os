@@ -883,6 +883,78 @@ export type Database = {
           },
         ]
       }
+      notification_events: {
+        Row: {
+          available_at: string
+          expires_at: string | null
+          id: string
+          invalidated_at: string | null
+          kind: string
+          location_id: string
+          organization_id: string
+          revision: number
+          source_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          available_at?: string
+          expires_at?: string | null
+          id?: string
+          invalidated_at?: string | null
+          kind: string
+          location_id: string
+          organization_id: string
+          revision?: number
+          source_id: string
+        }
+        Update: {
+          available_at?: string
+          expires_at?: string | null
+          id?: string
+          invalidated_at?: string | null
+          kind?: string
+          location_id?: string
+          organization_id?: string
+          revision?: number
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_events_organization_id_location_id_fkey"
+            columns: ["organization_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      notification_reads: {
+        Row: {
+          event_id: string
+          read_at: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          event_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          event_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_reads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "notification_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           active: boolean

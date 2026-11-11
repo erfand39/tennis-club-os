@@ -11,6 +11,7 @@ import { calendarPath } from '@/lib/calendar-dates';
 import { isFinanceAction,runFinanceAction } from '@/lib/finance-commands';
 import { financePath } from '@/lib/finance-fields';
 import { InputError } from '@/lib/input';
+import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCookie } from '@/lib/notifications';
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
 import { isResourceKind, resourcePath } from '@/lib/resource-fields';
 import {
@@ -124,9 +125,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
   try {
     const fields = await form(request);
     if (action === 'logout') {
-      await removeSession(currentToken);
+      const device=request.cookies.get(pushCookie)?.value;
+      await removeSession(currentToken,device&&uuid(device)?device:undefined);
       const response = go('/');
       clearSessionCookie(response);
+      setPushCookie(response,'',0);
       return response;
     }
     if (action === 'login') {
@@ -181,6 +184,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     const club = await clubFor(user.id, org);
     if (!club) throw new InputError('denied', 403);
 
+    if (action==='notice-read') {
+      const branch=fields.get('branch')?idOf(fields,'branch'):null;
+      errorPath=noticePath(org,branch??undefined);
+      const event=fields.get('event')==='all'?null:idOf(fields,'event');
+      await markNotices(user.id,org,branch,event);
+      return wantsJson?NextResponse.json({ok:true}):go(errorPath);
+    }
+    if (action==='notice-push' || action==='notice-disable') {
+      const previous=request.cookies.get(pushCookie)?.value;
+      const response=NextResponse.json({ok:true});
+      if (action==='notice-push') {
+        setPushCookie(response,await enableDevice(user.id,org,fields.get('subscription')??'',previous));
+      } else {
+        await disableDevice(previous,user.id,org);
+        setPushCookie(response,'',0);
+      }
+      return response;
+    }
     if (action === 'profile') {
       errorPath = `/club/${org}/profile`;
       await asUser(user.id, db => db.query('select public.update_my_profile($1)', [nameOf(fields)]));

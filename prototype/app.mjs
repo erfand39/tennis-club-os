@@ -92,6 +92,7 @@ root.innerHTML = `
     </a>
     ${navLinks('side-nav')}
     <div class="sidebar-bottom">
+      <a class="sidebar-help" href="./notifications.html">${icon('info',18)} اعلان‌ها</a>
       <a class="sidebar-help" href="./reports.html">${icon('dashboard',18)} گزارش‌ها</a>
       <a class="sidebar-help" href="./finance.html">${icon('dashboard',18)} امور مالی</a>
       <a class="sidebar-help" href="./manage.html">${icon('people', 18)} مدیریت پرونده‌ها</a>
@@ -173,7 +174,7 @@ function dashboard() {
   return `
     <div class="page-heading">
       <div><h1>نمای کلی باشگاه</h1><p>${longDate(today)}</p></div>
-      <div class="finance-shortcuts"><a class="button subtle" href="./reports.html">گزارش‌ها</a>${newButton()}</div>
+      <div class="finance-shortcuts demo-actions"><a class="button subtle" href="./notifications.html">اعلان‌ها</a><a class="button subtle" href="./reports.html">گزارش‌ها</a>${newButton()}</div>
     </div>
     <section class="hero" aria-labelledby="next-title">
       <div class="hero-content">
@@ -524,7 +525,7 @@ function help() {
     <footer class="dialog-actions"><button class="button subtle" data-action="reset-prompt">${icon('refresh', 18)} بازنشانی داده‌های نمونه</button>
     <a class="button subtle" href="./access.html">نمونهٔ ورود و دسترسی</a>
     <a class="button subtle" href="./manage.html">مدیریت پرونده‌ها</a>
-    <a class="button subtle" href="./finance.html">امور مالی</a><a class="button subtle" href="./reports.html">گزارش‌ها</a></footer>`);
+    <a class="button subtle" href="./finance.html">امور مالی</a><a class="button subtle" href="./reports.html">گزارش‌ها</a><a class="button subtle" href="./notifications.html">اعلان‌ها</a></footer>`);
 }
 
 function complete(message) {

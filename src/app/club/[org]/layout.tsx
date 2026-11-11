@@ -25,6 +25,7 @@ export default async function ClubLayout({ children, params }: { children: React
         { href: `/club/${org}/classes`, label: 'کلاس‌ها و حضور' },
         { href: `/club/${org}/finance`, label: 'امور مالی' },
         { href: `/club/${org}/reports`, label: 'گزارش‌ها' },
+        { href: `/club/${org}/notifications`, label: 'اعلان‌ها' },
         { href: resourcePath(org,'courts'), label: 'زمین‌ها' },
         { href: resourcePath(org,'coaches'), label: 'مربیان' },
         { href: resourcePath(org,'students'), label: 'شاگردان' },

@@ -1,4 +1,5 @@
 import 'server-only';
+import { localOrigin } from './local-origin';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -6,14 +7,7 @@ function required(name: string): string {
   return value;
 }
 
-export function appOrigin(): string {
-  const origin = new URL(required('SAM_ORIGIN'));
-  if (origin.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)
-    || origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash) {
-    throw new Error('SAM_ORIGIN must be a loopback HTTP origin.');
-  }
-  return origin.origin;
-}
+export const appOrigin = () => localOrigin(required('SAM_ORIGIN'));
 
 export const authUrl = () => required('SAM_AUTH_URL');
 export const authSecret = () => required('SAM_JWT_SECRET');

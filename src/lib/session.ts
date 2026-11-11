@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import type { NextResponse } from 'next/server';
 import { cache } from 'react';
 import { makeAuthClient } from '../../local/auth-client.mjs';
-import { authSecret, authUrl, sessionKey } from './config';
+import { appOrigin, authSecret, authUrl, sessionKey } from './config';
 import { database, hasManagerAccess, transaction } from './db';
 
 export const cookieName = 'sam_session';
@@ -21,7 +21,7 @@ type StoredSession = {
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const validToken = (value: string | undefined): value is string => !!value && /^[A-Za-z0-9_-]{43}$/.test(value);
-const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: false, path: '/' };
+const cookieOptions = () => ({ httpOnly: true, sameSite: 'lax' as const, secure:appOrigin().startsWith('https:'), path: '/' });
 
 export const publicAuth = () => makeAuthClient(authUrl());
 export const adminAuth = () => makeAuthClient(authUrl(), authSecret());
@@ -63,10 +63,10 @@ export async function createWebSession(session: Session, replace?: string, revok
 }
 
 export function setSessionCookie(response: NextResponse, value: string): void {
-  response.cookies.set(cookieName, value, { ...cookieOptions, maxAge: lifetimeSeconds });
+  response.cookies.set(cookieName, value, { ...cookieOptions(), maxAge: lifetimeSeconds });
 }
 export function clearSessionCookie(response: NextResponse): void {
-  response.cookies.set(cookieName, '', { ...cookieOptions, maxAge: 0 });
+  response.cookies.set(cookieName, '', { ...cookieOptions(), maxAge: 0 });
 }
 
 function needRefresh(row: StoredSession): boolean {
@@ -116,10 +116,14 @@ export async function identify(value: string | undefined): Promise<WebUser | nul
 
 export const currentUser = cache(async () => identify((await cookies()).get(cookieName)?.value));
 
-export async function removeSession(value: string | undefined): Promise<void> {
+export async function removeSession(value: string | undefined, device?:string): Promise<void> {
   if (!validToken(value)) return;
-  const { rows: [row] } = await database().query<StoredSession>(
-    'delete from tennis_runtime.web_sessions where token_hash=$1 returning user_id,email,credentials,access_expires_at', [digest(value)],
-  );
-  if (row) await adminAuth().admin.signOut(open(row).access, 'local').catch(() => {});
+  const row=await transaction(async client=>{
+    const {rows:[session]}=await client.query<StoredSession>(
+      'delete from tennis_runtime.web_sessions where token_hash=$1 returning user_id,email,credentials,access_expires_at',[digest(value)],
+    );
+    if (session&&device) await client.query('delete from tennis_runtime.push_devices where id=$1 and user_id=$2',[device,session.user_id]);
+    return session;
+  });
+  if (row) await adminAuth().admin.signOut(open(row).access,'local').catch(()=>{});
 }

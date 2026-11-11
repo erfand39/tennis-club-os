@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isConfigured } from '@/lib/db';
 import { currentUser } from '@/lib/session';
@@ -25,6 +26,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       {!configured && <label className="field"><span>منطقهٔ زمانی شعبه</span><input name="timezone" dir="ltr" required defaultValue="Asia/Tehran" maxLength={80} /></label>}
       <button className="button primary">{configured ? 'ورود به پنل' : 'ساخت حساب مالک'}</button>
     </form>
+    <p><Link className="button subtle" href="/install">راهنمای نصب برنامه</Link></p>
     {configured && <details className="access-help"><summary>بازیابی گذرواژه</summary>
       <p>برای حساب مدیران شعبه از مالک پیوند بازیابی بگیرید. مالک می‌تواند با دستور <code dir="ltr">./scripts/local.sh recover OWNER_EMAIL</code> پیوند بسازد.</p></details>}
   </AccessShell>;
