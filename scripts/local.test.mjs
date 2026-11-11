@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import pg from 'pg';
 
@@ -12,11 +12,12 @@ assert.equal(new URL(databaseUrl).search, '', 'The test database URL must use th
 const db = new pg.Client({ connectionString: databaseUrl });
 const password = `Test-${randomBytes(16).toString('hex')}`;
 const ownerEmail = 'owner@sam.example';
-const roles = ['admin', 'receptionist', 'coach', 'accountant', 'student'];
+const roles = ['admin'];
 const identities = new Map();
 let owner;
 let org;
 let branch;
+let secondBranch;
 
 function get(path, cookie) {
   return fetch(new URL(path, origin), { redirect: 'manual', headers: cookie ? { Cookie: cookie } : {} });
@@ -76,7 +77,7 @@ test('sign in, signed cookies, and a persisted profile', async () => {
   assert.match(await (await get(`/club/${org}/profile`, owner)).text(), /نام مالک سام/);
 });
 
-test('invitation and single-use acceptance for every club role', async () => {
+test('invitation and single-use acceptance for a manager', async () => {
   for (const role of roles) {
     const email = `${role}@sam.example`;
     const invitation = await post('invite', { org, email, role, location: branch }, owner);
@@ -92,8 +93,15 @@ test('invitation and single-use acceptance for every club role', async () => {
   }
 });
 
-test('server-side role enforcement and branch isolation across all roles', async () => {
-  await db.query("insert into public.locations (organization_id,name,timezone) values ($1,'شعبهٔ دوم آزمایشی','Asia/Tehran')", [org]);
+test('manager-only invitations and branch isolation', async () => {
+  const {rows:[second]}=await db.query("insert into public.locations (organization_id,name,timezone) values ($1,'شعبهٔ دوم آزمایشی','Asia/Tehran') returning id",[org]);
+  secondBranch=second.id;
+  for (const role of ['coach','student','receptionist','accountant']) {
+    const email=`${role}@sam.example`;
+    assert.equal((await post('invite',{org,email,role,location:branch},owner)).status,403);
+    const {rows}=await db.query('select id from auth.users where email=$1',[email]);
+    assert.equal(rows.length,0);
+  }
   const { rows: [other] } = await db.query("insert into public.organizations (name) values ('مجموعهٔ دیگر') returning id");
   for (const [role, { cookie, id }] of identities) {
     const permitted = await get(`/club/${org}`, cookie);
@@ -107,14 +115,17 @@ test('server-side role enforcement and branch isolation across all roles', async
   }
   assert.match(await (await get(`/club/${org}`, owner)).text(), /شعبهٔ دوم آزمایشی/);
   const { rows: [actor] } = await db.query('select id from auth.users where email=$1', [ownerEmail]);
-  assert.equal((await post('member', { org, user: actor.id, role: 'receptionist', location: branch }, owner)).status, 403);
-  const reception = identities.get('receptionist');
-  assert.equal((await post('member', { org, user: reception.id, role: 'receptionist', active: 'no', location: branch }, owner)).status, 303);
-  assert.equal((await get(`/club/${org}`, reception.cookie)).status, 404);
+  assert.equal((await post('member', { org, user: actor.id, role: 'admin', location: branch }, owner)).status, 403);
+  const manager = identities.get('admin');
+  assert.equal((await post('member', {org,user:manager.id,role:'admin',active:'no',location:branch},owner)).status,303);
+  assert.equal((await get(`/club/${org}`,manager.cookie)).status,307);
+  assert.equal((await post('login',{email:manager.email,password})).status,403);
+  assert.equal((await post('member', {org,user:manager.id,role:'admin',active:'yes',location:branch},owner)).status,303);
+
 });
 
 test('concurrent refresh preserves a single valid local session', async () => {
-  const { cookie, id } = identities.get('coach');
+  const { cookie, id } = identities.get('admin');
   await db.query("update tennis_runtime.web_sessions set access_expires_at=now()-interval '1 second' where user_id=$1", [id]);
   const results = await Promise.all([get(`/club/${org}`, cookie), get(`/club/${org}`, cookie)]);
   assert.deepEqual(results.map(response => response.status), [200, 200]);
@@ -123,24 +134,75 @@ test('concurrent refresh preserves a single valid local session', async () => {
 });
 
 test('recovery and logout revoke prior sessions', async () => {
-  const coach = identities.get('coach');
-  const response = await post('recovery', { org, user: coach.id }, owner);
+  const manager = identities.get('admin');
+  const response = await post('recovery', { org, user: manager.id }, owner);
   assert.equal(response.status, 200);
   const newPassword = `${password}-next`;
   const recovered = await post('redeem', { mode: 'recovery', token: token((await response.json()).link), password: newPassword });
   assert.equal(recovered.status, 200, recovered.status === 200 ? '' : await recovered.text());
   const cookie = sessionCookie(recovered);
-  assert.equal((await get(`/club/${org}`, coach.cookie)).status, 307);
-  assert.equal((await post('login', { email: coach.email, password })).status, 401);
+  assert.equal((await get(`/club/${org}`, manager.cookie)).status, 307);
+  assert.equal((await post('login', { email: manager.email, password })).status, 401);
   assert.equal((await post('logout', {}, cookie)).status, 303);
   assert.equal((await get(`/club/${org}`, cookie)).status, 307);
-  assert.equal((await post('login', { email: coach.email, password: newPassword })).status, 303);
+  assert.equal((await post('login', { email: manager.email, password: newPassword })).status, 303);
+});
+
+test('management screens create, filter, edit and archive local records', async () => {
+  const cmd=(action,fields,cookie=owner)=>post(action,{org,request:randomUUID(),...fields},cookie);
+  const create=async fields=>{
+    const response=await cmd('resource',fields);
+    assert.equal(response.status,200,response.status===200?'':await response.text());
+    return (await response.json()).next.split('?')[0];
+  };
+  const court=await create({kind:'courts',name:'زمین آزمایش سام',status:'active',surface:'خاک رس',capacity:'۴',amenities:'نور، رختکن',location:branch});
+  const courtId=court.split('/').at(-1);
+  const page=await get(court,owner);
+  assert.equal(page.status,200);
+  const html=await page.text();
+  assert.match(html,/زمین آزمایش سام/);
+  assert.match(html,/تعمیرات و انسداد زمین/);
+  assert.match(html,/اشغال امروز/);
+  const result=await get(`/club/${org}/resources/courts?q=${encodeURIComponent('آزمایش سام')}`,owner);
+  assert.equal(result.status,200);
+  assert.match(await result.text(),/زمین آزمایش سام/);
+  const edit=await cmd('resource',{kind:'courts',id:courtId,revision:'0',name:'زمین ویرایش سام',status:'active',surface:'هاردکورت',capacity:'6',location:branch});
+  assert.equal(edit.status,200);
+  const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const weekday=String(new Date(date+'T00:00Z').getUTCDay()||7);
+  for (const [action,fields] of [
+    ['resource-hours',{weekday,from:date,start:'08:00',end:'22:00'}],
+    ['resource-rate',{from:date,unit_minutes:'60',amount_minor:'۲٬۰۰۰٬۰۰۰',booking_kind:'rental'}],
+  ]) {
+    const setting=await cmd(action,{kind:'courts',id:courtId,location:branch,...fields});
+    assert.equal(setting.status,200,setting.status===200?'':await setting.text());
+  }
+  const occupancyPage=await (await get(court,owner)).text();
+  assert.match(occupancyPage.replaceAll('<!-- -->',''), /۸۴۰ دقیقه قابل رزرو/);
+  const future=new Date(Date.now()+2*86400000).toISOString().slice(0,10);
+  const block=await cmd('resource-block',{kind:'courts',id:courtId,location:branch,starts_at:future+'T10:00',ends_at:future+'T11:00',reason:'تعمیرات آزمایشی'});
+  assert.equal(block.status,200,block.status===200?'':await block.text());
+  const {rows:[maintenance]}=await db.query('select id from public.court_maintenance_blocks where court_id=$1',[courtId]);
+  assert.equal((await cmd('resource-release',{kind:'courts',id:courtId,location:branch,block:maintenance.id})).status,200);
+  const coach=await create({kind:'coaches',name:'مربی پرونده‌ای',status:'active',phone:'۰۹۱۲۳۴۵۶۷۸۹',specialty:'کلاس گروهی',location:branch,court_id:courtId});
+  const student=await create({kind:'students',name:'شاگرد پرونده‌ای',status:'active',skill_level:'متوسط',location:branch});
+  assert.equal((await get(coach,owner)).status,200);
+  const studentId=student.split('/').at(-1);
+  assert.equal((await cmd('resource',{kind:'students',id:studentId,revision:'0',intent:'archive'})).status,200);
+  assert.match(await (await get(student,owner)).text(),/آرشیوشده/);
+  const {rows:[person]}=await db.query('select user_id,status from public.student_profiles where id=$1',[studentId]);
+  assert.deepEqual(person,{user_id:null,status:'archived'});
+  const other=await create({kind:'courts',name:'زمین خارج از حوزه',status:'active',surface:'هاردکورت',capacity:'4',location:secondBranch});
+  const managerLogin=await post('login',{email:identities.get('admin').email,password:`${password}-next`});
+  assert.equal((await get(other,sessionCookie(managerLogin))).status,404);
 });
 
 test('leaving preserves the audit trail and removes club access', async () => {
-  const student = identities.get('student');
-  assert.equal((await post('leave', { org }, student.cookie)).status, 303);
-  assert.equal((await get(`/club/${org}`, student.cookie)).status, 404);
-  const { rows } = await db.query("select action from tennis_private.access_audit where organization_id=$1 and target_user_id=$2 order by id", [org, student.id]);
-  assert.deepEqual(rows.map(row => row.action), ['access_changed', 'membership_left']);
+  const manager=identities.get('admin');
+  const login=await post('login',{email:manager.email,password:`${password}-next`});
+  const cookie=sessionCookie(login);
+  assert.equal((await post('leave',{org},cookie)).status,303);
+  assert.equal((await get(`/club/${org}`,cookie)).status,307);
+  const {rows}=await db.query("select action from tennis_private.access_audit where organization_id=$1 and target_user_id=$2 order by id",[org,manager.id]);
+  assert.deepEqual(rows.map(row=>row.action),['access_changed','access_changed','access_changed','membership_left']);
 });

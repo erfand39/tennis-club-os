@@ -1,10 +1,11 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { clubFor, displayName } from '@/lib/club';
 import { roles } from '@/lib/roles';
+import { resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
 import { Brand, Logout } from '../../ui';
+import { ClubNav } from './nav';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,14 @@ export default async function ClubLayout({ children, params }: { children: React
   return <div className="local-shell">
     <aside className="local-sidebar">
       <Brand href={`/club/${org}`} />
-      <nav aria-label="ناوبری باشگاه">
-        <Link href={`/club/${org}`}>نمای کلی</Link>
-        {club.role === 'owner' && <Link href={`/club/${org}/members`}>کاربران و دسترسی</Link>}
-        <Link href={`/club/${org}/profile`}>پروفایل من</Link>
-      </nav>
+      <ClubNav links={[
+        { href: `/club/${org}`, label: 'نمای کلی' },
+        { href: resourcePath(org,'courts'), label: 'زمین‌ها' },
+        { href: resourcePath(org,'coaches'), label: 'مربیان' },
+        { href: resourcePath(org,'students'), label: 'شاگردان' },
+        ...(club.role === 'owner' ? [{ href: `/club/${org}/members`, label: 'مدیران و دسترسی' }] : []),
+        { href: `/club/${org}/profile`, label: 'پروفایل من' },
+      ]} />
       <div className="local-account"><strong>{name || 'حساب باشگاه'}</strong><small>{roles[club.role]}</small><Logout /></div>
     </aside>
     <main className="local-content">{children}</main>

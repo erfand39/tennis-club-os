@@ -1,19 +1,18 @@
 import { timingSafeEqual } from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { appOrigin, authUrl, setupCode } from '@/lib/config';
-import { asUser, database, isConfigured } from '@/lib/db';
+import { asUser, database, hasManagerAccess, isConfigured } from '@/lib/db';
 import { clubFor, members, uuid } from '@/lib/club';
 import { type ClubRole, roles } from '@/lib/roles';
+import { InputError } from '@/lib/input';
+import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
+import { isResourceKind, resourcePath } from '@/lib/resource-fields';
 import {
   adminAuth, clearSessionCookie, cookieName, createWebSession, identify, publicAuth, removeSession, setSessionCookie,
 } from '@/lib/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-class InputError extends Error {
-  constructor(readonly code: string, readonly status = 400) { super(code); }
-}
 
 function go(path: string, problem?: string): NextResponse {
   const url = new URL(path, appOrigin());
@@ -77,11 +76,10 @@ function accessOf(values: URLSearchParams) {
   const role = values.get('role') ?? '';
   const locations = values.getAll('location');
   const active = values.get('active') !== 'no';
-  const person = values.get('person') || null;
-  if (!Object.hasOwn(roles, role) || locations.some(id => !uuid(id)) || locations.length > 100
-    || (person && !uuid(person))) throw new InputError('access');
+  if (!Object.hasOwn(roles, role)) throw new InputError('manager-only', 403);
+  if (locations.some(id => !uuid(id)) || locations.length > 100) throw new InputError('access');
   if (role !== 'owner' && active && !locations.length) throw new InputError('branches');
-  return { role: role as ClubRole, locations: role === 'owner' ? [] : locations, active, person };
+  return { role: role as ClubRole, locations: role === 'owner' ? [] : locations, active };
 }
 
 async function signIn(email: string, password: string) {
@@ -127,6 +125,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     if (action === 'login') {
       const session = await signIn(emailOf(fields), passwordOf(fields, false));
+      if (!(await hasManagerAccess(session.user.id))) throw new InputError('manager-only', 403);
       const response = go('/club');
       setSessionCookie(response, await createWebSession(session, currentToken));
       return response;
@@ -160,6 +159,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const auth = publicAuth();
       const result = await auth.verifyOtp({ type: mode, token_hash: token });
       if (result.error || !result.data.session) throw new InputError('link');
+      if (!(await hasManagerAccess(result.data.session.user.id))) throw new InputError('manager-only', 403);
       const changed = await auth.updateUser({ password });
       if (changed.error || !changed.data.user) throw new InputError('password-update');
       // Sign in with the new password so the local session uses fresh tokens.
@@ -185,14 +185,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       await asUser(user.id, db => db.query('select public.leave_club($1)', [org]));
       return go('/club');
     }
+    if (isResourceCommand(action)) {
+      const kind = fields.get('kind') ?? '';
+      if (!isResourceKind(kind)) throw new InputError('resource-invalid');
+      const target = fields.get('id') ?? '';
+      errorPath = resourcePath(org, kind, uuid(target) ? target : 'new');
+      const next = await runResourceCommand(action, fields, user.id, org);
+      return wantsJson ? NextResponse.json({ next }) : go(next);
+    }
     if (club.role !== 'owner') throw new InputError('denied', 403);
     errorPath = `/club/${org}/members`;
 
     if (action === 'member') {
       const target = idOf(fields, 'user');
       const access = accessOf(fields);
-      await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5,$6)',
-        [org, target, access.role, access.active, access.locations, access.person]));
+      await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5)',
+        [org, target, access.role, access.active, access.locations]));
       return go(`${errorPath}?saved=1`);
     }
     if (action === 'invite') {
@@ -201,8 +209,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const access = accessOf(fields);
       const result = await adminAuth().admin.generateLink({ type: 'invite', email });
       if (result.error || !result.data.properties?.hashed_token || !result.data.user?.id) throw new InputError('invite');
-      await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5,$6)',
-        [org, result.data.user.id, access.role, true, access.locations, access.person]));
+      await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5)',
+        [org, result.data.user.id, access.role, true, access.locations]));
       return NextResponse.json({ link: redeemUrl('invite', result.data.properties.hashed_token) });
     }
     if (action === 'recovery') {
@@ -219,8 +227,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     const code = failure instanceof InputError ? failure.code
       : dbError.code === '42501' ? 'denied'
       : dbError.message === 'invalid_member_locations' ? 'branches'
-      : dbError.message === 'invalid_member_person' ? 'person'
+      : dbError.message === 'manager_role_required' ? 'manager-only'
       : dbError.message === 'club_already_configured' ? 'setup-done'
+      : dbError.message === 'resource_stale' ? 'resource-stale'
+      : dbError.message === 'request_payload_mismatch' ? 'resource-request'
+      : dbError.message === 'coach_court_scope_invalid' ? 'resource-courts'
+      : dbError.message === 'rate_must_follow_latest' ? 'resource-rate'
+      : dbError.code === '23P01' ? 'resource-conflict'
+      : dbError.code === '23505' ? 'resource-duplicate'
+      : dbError.code === '23514' || dbError.code?.startsWith('22') ? 'resource-invalid'
       : dbError.code === '40001' || dbError.code === '40P01' ? 'retry' : 'unavailable';
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
     return wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);

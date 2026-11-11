@@ -2,19 +2,12 @@ const root = document.querySelector('#access');
 const initial = root.innerHTML;
 const roles = {
   owner: { label: 'مالک', scope: 'همهٔ شعبه‌های مجموعه', details: 'عضویت، دعوت و تغییر سطح دسترسی کاربران' },
-  admin: { label: 'مدیر', scope: 'شعبهٔ مرکزی', details: 'مدیریت عملیات و گزارش‌های شعبهٔ مجاز' },
-  receptionist: { label: 'پذیرش', scope: 'شعبهٔ مرکزی', details: 'برنامه و رزروهای شعبهٔ مجاز' },
-  coach: { label: 'مربی', scope: 'شعبهٔ مرکزی', details: 'جلسات و شاگردان مرتبط با همین حساب' },
-  accountant: { label: 'حسابدار', scope: 'شعبهٔ مرکزی', details: 'فاکتورها و دریافت‌های شعبهٔ مجاز' },
-  student: { label: 'شاگرد', scope: 'شعبهٔ مرکزی', details: 'پرونده و برنامهٔ آموزشی همین حساب' },
+  admin: { label: 'مدیر شعبه', scope: 'شعبهٔ مرکزی', details: 'مدیریت زمین‌ها، پروندهٔ مربیان و شاگردان شعبهٔ مجاز' },
 };
 const members = [
   { name: 'مدیر باشگاه', role: 'owner', active: true },
   { name: 'رها نوری', role: 'admin', active: true },
-  { name: 'بهنام زمانی', role: 'receptionist', active: true },
-  { name: 'آرمان کیانی', role: 'coach', active: true },
-  { name: 'ترانه فرهمند', role: 'accountant', active: false },
-  { name: 'سارا راد', role: 'student', active: true },
+  { name: 'بهنام زمانی', role: 'admin', active: false },
 ];
 
 function roster(filter = '') {
@@ -37,14 +30,14 @@ root.addEventListener('submit', event => {
     <section class="local-hero"><div><h1 tabindex="-1" id="demo-title">دسترسی ${role.label}</h1><p>${role.scope}</p><p>${role.details}</p></div></section>
     <div class="local-grid" style="margin-top:14px">
       <section class="panel local-panel"><h2>حساب و حوزهٔ دسترسی</h2><p>${role.details}</p><p>${role.scope}</p>
-        <a class="panel-link" href="./">داشبورد نمونه</a>
+        <a class="panel-link" href="./manage.html">مدیریت پرونده‌ها</a>
       </section>
       ${selected === 'owner' ? `<section class="panel local-panel">
-        <h2>اعضای نمونه</h2>
+        <h2>مدیران نمونه</h2>
         <label class="field"><span>فیلتر نقش</span><select id="demo-filter"><option value="">همهٔ نقش‌ها</option>
           ${Object.entries(roles).map(([id, item]) => `<option value="${id}">${item.label}</option>`).join('')}</select></label>
         <ul class="local-branches" id="demo-members">${roster()}</ul>
-      </section>` : '<section class="panel local-panel"><h2>مدیریت کاربران</h2><p>مدیریت عضویت و نقش کاربران در دسترسی مالک مجموعه قرار دارد.</p></section>'}
+      </section>` : '<section class="panel local-panel"><h2>مدیریت مدیران</h2><p>مدیریت عضویت و نقش کاربران در دسترسی مالک مجموعه قرار دارد.</p></section>'}
     </div>`;
   root.querySelector('#demo-title').focus();
 });

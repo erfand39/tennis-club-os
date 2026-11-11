@@ -21,7 +21,7 @@ let databaseCreated = false;
 let db;
 let owner;
 let otherOwner;
-let reception;
+let manager;
 let coach;
 let student;
 let anon;
@@ -41,7 +41,7 @@ const student2 = id(42);
 const otherOrg = id(101);
 const otherLocation = id(111);
 const otherOrgCourt = id(121);
-const users = { owner: id(201), reception: id(202), coach: id(203), student: id(204), outsider: id(205) };
+const users = { owner: id(201), manager: id(202), coach: id(203), student: id(204), outsider: id(205) };
 const now = new Date();
 const anchor = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 5, 30);
 const at = (minute, day = 0) => new Date(anchor + (minute + day * 1440) * 60000).toISOString();
@@ -115,7 +115,7 @@ before(async () => {
   db = await connect();
   await db.query(`
     create schema auth;
-    create table auth.users (id uuid primary key);
+    create table auth.users (id uuid primary key, email text);
     create function auth.uid() returns uuid language sql stable
     as $$ select (nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'sub')::uuid $$;
     grant usage on schema auth to anon, authenticated;
@@ -124,6 +124,16 @@ before(async () => {
   for (const file of (await readdir(migrations)).filter(file => file.endsWith('.sql')).sort()) {
     try {
       await db.query(await readFile(new URL(file, migrations), 'utf8'));
+      if (file.endsWith('_club_identity.sql')) {
+        await db.query("insert into public.organizations (id,name) values ($1,'دادهٔ نسخهٔ قبلی')",[id(301)]);
+        await db.query('insert into auth.users (id) values ($1),($2)',[users.coach,users.student]);
+        await db.query("insert into public.organization_members (organization_id,user_id,role) values ($1,$2,'coach'),($1,$3,'student')",
+          [id(301),users.coach,users.student]);
+        await db.query("insert into public.coach_profiles (id,organization_id,user_id,name) values ($1,$2,$3,'مربی قدیمی')",
+          [id(331),id(301),users.coach]);
+        await db.query("insert into public.student_profiles (id,organization_id,user_id,name) values ($1,$2,$3,'شاگرد قدیمی')",
+          [id(341),id(301),users.student]);
+      }
     } catch (error) {
       throw new Error(`${file}: ${error.message}`, { cause: error });
     }
@@ -133,18 +143,15 @@ before(async () => {
   await db.query("insert into public.locations (id, organization_id, name) values ($1,$2,'شعبهٔ بیرونی')", [otherLocation, otherOrg]);
   await db.query("insert into public.courts (id, organization_id, location_id, name, surface) values ($1,$2,$3,'زمین دیگر','خاک رس')",
     [otherOrgCourt, otherOrg, otherLocation]);
-  await db.query('insert into auth.users select unnest($1::uuid[])', [Object.values(users)]);
+  await db.query('insert into auth.users (id) select unnest($1::uuid[]) on conflict do nothing', [Object.values(users)]);
   await db.query(`insert into public.organization_members (organization_id,user_id,role) values
-    ($1,$2,'owner'),($1,$3,'receptionist'),($1,$4,'coach'),($1,$5,'student'),($6,$7,'owner')`,
-  [org, users.owner, users.reception, users.coach, users.student, otherOrg, users.outsider]);
-  await db.query(`insert into public.member_locations (organization_id,location_id,user_id) values
-    ($1,$2,$3),($1,$2,$4),($1,$2,$5)`, [org, main, users.reception, users.coach, users.student]);
-  await db.query('update public.coach_profiles set user_id = $1 where id = $2', [users.coach, coach1]);
-  await db.query('update public.student_profiles set user_id = $1 where id = $2', [users.student, student1]);
+    ($1,$2,'owner'),($1,$3,'admin'),($4,$5,'owner')`, [org,users.owner,users.manager,otherOrg,users.outsider]);
+  await db.query('insert into public.member_locations (organization_id,location_id,user_id) values ($1,$2,$3)',
+    [org,main,users.manager]);
 
   owner = await connect(users.owner);
   otherOwner = await connect(users.outsider);
-  reception = await connect(users.reception);
+  manager = await connect(users.manager);
   coach = await connect(users.coach);
   student = await connect(users.student);
   anon = await connect(null, 'anon');
@@ -163,11 +170,11 @@ after(async () => {
 test('migration, grants, RLS and composite organization keys', async () => {
   assert.equal(await scalar(owner, 'select name from public.organizations'), 'باشگاه تنیس سام');
   assert.equal(await scalar(owner, 'select count(*)::int from public.locations'), 2);
-  assert.equal(await scalar(reception, 'select count(*)::int from public.locations'), 1);
+  assert.equal(await scalar(manager, 'select count(*)::int from public.locations'), 1);
   assert.equal(await scalar(otherOwner, 'select count(*)::int from public.courts where organization_id = $1', [org]), 0);
   await assert.rejects(anon.query('select * from public.courts'), { code: '42501' });
   await assert.rejects(reserve(anon), { code: '42501' });
-  await assert.rejects(reserve(reception, { location: second, targetCourt: secondCourt }), { code: '42501' });
+  await assert.rejects(reserve(manager, { location: second, targetCourt: secondCourt }), { code: '42501' });
   await assert.rejects(reserve(otherOwner, { organization: otherOrg, location: main }), { code: '42501' });
   await assert.rejects(owner.query("update public.courts set name = 'تغییر مستقیم'"), { code: '42501' });
   await assert.rejects(owner.query('select * from tennis_private.audit_events'), { code: '42501' });
@@ -285,7 +292,7 @@ test('financial snapshot, concurrent payments and refunds, and restricted access
   const refunded = await collide(owner, sibling, () => refund(owner, refundKey), () => refund(sibling, randomUUID()),
     { code: '23514', message: 'refund_exceeds_payment' });
   assert.equal(await refund(owner, refundKey), refunded);
-  await assert.rejects(refund(reception, randomUUID()), { code: '42501' });
+  await assert.rejects(refund(coach, randomUUID()), { code: '42501' });
   const { rows: [balance] } = await owner.query('select due_minor, received_minor, status from public.invoice_balances where invoice_id=$1', [invoice]);
   assert.deepEqual(balance, { due_minor: '2600000', received_minor: '1000000', status: 'partial' });
   await sibling.query('begin isolation level repeatable read');
@@ -311,15 +318,58 @@ test('schedule version prevents stale decisions at repeatable read', async () =>
   assert.ok(await reserve(sibling, draft));
 });
 
-test('coach and student see only linked records, and deactivation takes effect', async () => {
-  assert.ok(await scalar(coach, 'select count(*)::int from public.sessions') > 0);
-  assert.equal(await scalar(coach, "select count(*)::int from public.bookings where kind='rental'"), 0);
-  assert.deepEqual((await student.query('select student_id from public.session_participants')).rows.map(row => row.student_id),
-    [student1, student1, student1]);
-  assert.deepEqual((await student.query('select id from public.student_profiles')).rows.map(row => row.id), [student1]);
-  assert.equal(await scalar(student, 'select count(*)::int from public.invoice_balances'), 0);
-  await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2', [org, users.coach]);
-  assert.equal(await scalar(coach, 'select count(*)::int from public.sessions'), 0);
+test('legacy coach and student accounts are retired and their records are preserved', async () => {
+  assert.equal(await scalar(coach,'select count(*)::int from public.organizations'),0);
+  assert.equal(await scalar(student,'select count(*)::int from public.student_profiles'),0);
+  assert.equal(await scalar(db,"select name from public.coach_profiles where id=$1 and user_id is null",[id(331)]),'مربی قدیمی');
+  assert.equal(await scalar(db,"select name from public.student_profiles where id=$1 and user_id is null",[id(341)]),'شاگرد قدیمی');
+  assert.equal(await scalar(db,"select count(*)::int from tennis_private.access_audit where organization_id=$1 and action='non_manager_access_retired'",[id(301)]),2);
+  await assert.rejects(scalar(owner,"select public.set_club_member($1,$2,'coach',true,$3)",[org,users.coach,[main]]), {message:'manager_role_required'});
+  await assert.rejects(db.query("insert into public.organization_members (organization_id,user_id,role) values ($1,$2,'student')",
+    [org,users.student]),{code:'23514'});
+});
+
+function saveResource(client, kind, target, revision, locations, values, key=randomUUID()) {
+  return scalar(client,'select public.save_club_resource($1,$2,$3,$4,$5,$6,$7)',[org,kind,target,revision,locations,values,key]);
+}
+
+test('directory saves are idempotent, versioned, branch-scoped and audited', async () => {
+  const draft={name:'زمین جدید',surface:'خاک رس',status:'active',capacity:4,amenities:['نور']};
+  const key=randomUUID();
+  const created=await saveResource(manager,'court',null,null,[main],draft,key);
+  assert.equal(await saveResource(manager,'court',null,null,[main],draft,key),created);
+  await assert.rejects(saveResource(manager,'court',null,null,[second],draft),{code:'42501'});
+  await assert.rejects(saveResource(coach,'court',null,null,[main],draft),{code:'42501'});
+  await assert.rejects(saveResource(manager,'court',null,null,[main],{...draft,name:'نام دیگر'},key),{message:'request_payload_mismatch'});
+  await saveResource(manager,'court',created,0,[main],{...draft,name:'زمین ویرایش‌شده'});
+  await assert.rejects(saveResource(manager,'court',created,0,[main],draft),{message:'resource_stale'});
+  await saveResource(manager,'court',created,1,[],{action:'archive'});
+  assert.equal(await scalar(owner,'select status from public.courts where id=$1',[created]),'archived');
+  const {rows}=await manager.query("select action from public.resource_history($1,'court',$2)",[org,created]);
+  assert.deepEqual(rows.map(row=>row.action),['archived','edited','created']);
+});
+
+test('availability and court restrictions protect existing and future reservations', async () => {
+  const tomorrow=at(0).slice(0,10);
+  const weekday=new Date(tomorrow+'T00:00Z').getUTCDay() || 7;
+  await assert.rejects(saveResource(owner,'court',court,0,[],{action:'archive'}),{message:'resource_has_future_booking'});
+  await assert.rejects(scalar(owner,"select public.set_resource_hours($1,'court',$2,$3,$4,$5,780,1320,$6)",
+    [org,court,main,weekday,tomorrow,randomUUID()]),{message:'hours_conflict_with_future_booking'});
+  await saveResource(owner,'coach',coach1,0,[main,second],{name:'آرمان کیانی',status:'active',court_ids:[court]});
+  await assert.rejects(reserve(owner,{targetCourt:otherCourt,day:4,start:0,kind:'private',trainer:coach1,learner:student1}),
+    {message:'coach_court_not_allowed'});
+  assert.ok(await reserve(owner,{targetCourt:court,day:4,start:0,kind:'private',trainer:coach1,learner:student1}));
+  await assert.rejects(saveResource(manager,'coach',coach1,1,[main],{name:'ویرایش شعبه',status:'active'}),{code:'42501'});
+});
+
+test('dated tariff preserves an earlier booking snapshot', async () => {
+  const from=at(0,2).slice(0,10);
+  const previous=await scalar(owner,"select booking_id from public.booking_prices where court_id=$1 and amount_minor=3600000 limit 1",[court]);
+  assert.ok(previous);
+  await scalar(owner,"select public.set_court_rate($1,$2,$3,'rental',$4,30,2500000,$5)",[org,main,court,from,randomUUID()]);
+  const booking=await reserve(owner,{day:2,start:0});
+  assert.equal(await scalar(owner,'select amount_minor from public.booking_prices where booking_id=$1',[booking]),'5000000');
+  assert.equal(await scalar(owner,'select amount_minor from public.booking_prices where booking_id=$1',[previous]),'3600000');
 });
 
 test('calendar query uses the scope and start-time index on 2400 historical rows', async () => {

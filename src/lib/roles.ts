@@ -1,9 +1,5 @@
 export const roles = {
   owner: 'مالک',
-  admin: 'مدیر',
-  receptionist: 'پذیرش',
-  coach: 'مربی',
-  accountant: 'حسابدار',
-  student: 'شاگرد',
+  admin: 'مدیر شعبه',
 } as const;
 export type ClubRole = keyof typeof roles;

@@ -1,15 +1,13 @@
 import { notFound, redirect } from 'next/navigation';
 import { type Branch, type Member, branches, clubFor, members } from '@/lib/club';
-import { asUser } from '@/lib/db';
 import { currentUser } from '@/lib/session';
 import { roles } from '@/lib/roles';
 import { Notice } from '../../../ui';
 import { LinkForm } from './link-form';
 
-type Person = { id: string; name: string; kind: 'coach' | 'student' };
-function AccessFields({ scope, people, member }: { scope: Branch[]; people: Person[]; member?: Member }) {
+function AccessFields({ scope, member }: { scope: Branch[]; member?: Member }) {
   return <>
-    <label className="field"><span>نقش</span><select name="role" defaultValue={member?.role ?? 'receptionist'}>
+    <label className="field"><span>نقش</span><select name="role" defaultValue={member?.role ?? 'admin'}>
       {Object.entries(roles).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
     {member && <label className="field"><span>وضعیت عضویت</span><select name="active" defaultValue={member.active ? 'yes' : 'no'}>
       <option value="yes">فعال</option><option value="no">غیرفعال</option></select></label>}
@@ -18,11 +16,6 @@ function AccessFields({ scope, people, member }: { scope: Branch[]; people: Pers
         defaultChecked={member?.location_ids.includes(branch.id) ?? (scope.length === 1)} /> {branch.name}</label>)}
       <small>مالک به همهٔ شعبه‌های مجموعه دسترسی دارد.</small>
     </fieldset>
-    {people.length > 0 && <label className="field"><span>پیوند به پروندهٔ مربی یا شاگرد</span>
-      <select name="person" defaultValue={member?.person_id ?? ''}>
-        <option value="">بدون انتخاب پروندهٔ جدید</option>
-        {people.map(person => <option key={person.id} value={person.id}>{person.name} · {roles[person.kind]}</option>)}
-      </select></label>}
   </>;
 }
 
@@ -36,18 +29,11 @@ export default async function Members({ params, searchParams }: {
   const club = await clubFor(user.id, org);
   if (!club || club.role !== 'owner') notFound();
   const filters = await searchParams;
-  const [scope, all, people] = await Promise.all([
-    branches(user.id, org),
-    members(user.id, org),
-    asUser(user.id, async db => (await db.query<Person>(`
-      select id,name,'coach' as kind from public.coach_profiles where organization_id=$1 and status='active'
-      union all select id,name,'student' as kind from public.student_profiles where organization_id=$1 and status='active'
-      order by name`, [org])).rows),
-  ]);
+  const [scope, all] = await Promise.all([branches(user.id, org), members(user.id, org)]);
   const shown = all.filter(member => (!filters.role || member.role === filters.role)
     && (!filters.status || member.active === (filters.status === 'active')));
   return <>
-    <header className="local-heading"><div><h1>کاربران و دسترسی</h1><p>{club.name}</p></div></header>
+    <header className="local-heading"><div><h1>مدیران و دسترسی</h1><p>{club.name}</p></div></header>
     <Notice error={filters.error} saved={filters.saved === '1'} />
     <div className="local-grid">
       <section className="panel local-panel">
@@ -69,7 +55,7 @@ export default async function Members({ params, searchParams }: {
           <div className="member-details">
             {member.user_id !== user.id && <form className="local-form" method="post" action="/api/member">
               <input type="hidden" name="org" value={org} /><input type="hidden" name="user" value={member.user_id} />
-              <AccessFields scope={scope} people={people} member={member} />
+              <AccessFields scope={scope} member={member} />
               <button className="button primary">ذخیرهٔ دسترسی</button>
             </form>}
             {member.active && member.email && <LinkForm action="recovery" label="ساخت پیوند بازیابی">
@@ -78,12 +64,12 @@ export default async function Members({ params, searchParams }: {
           </div>
         </details>)}</div>
       </section>
-      <section className="panel local-panel"><h2>دعوت کاربر</h2>
-        <p>برای کاربر تازه، پیوند یک‌بارمصرف بسازید و آن را مستقیم در اختیار او بگذارید.</p>
+      <section className="panel local-panel"><h2>دعوت مدیر</h2>
+        <p>برای مدیر تازه، پیوند یک‌بارمصرف بسازید و آن را مستقیم در اختیار او بگذارید.</p>
         <LinkForm action="invite" label="ساخت پیوند دعوت">
           <input type="hidden" name="org" value={org} />
-          <label className="field"><span>ایمیل کاربر</span><input name="email" dir="ltr" type="email" required maxLength={254} /></label>
-          <AccessFields scope={scope} people={people} />
+          <label className="field"><span>ایمیل مدیر</span><input name="email" dir="ltr" type="email" required maxLength={254} /></label>
+          <AccessFields scope={scope} />
         </LinkForm>
       </section>
     </div>

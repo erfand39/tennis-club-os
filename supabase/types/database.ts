@@ -229,19 +229,59 @@ export type Database = {
           },
         ]
       }
-      coach_locations: {
+      coach_courts: {
         Row: {
           coach_id: string
+          court_id: string
           location_id: string
           organization_id: string
         }
         ComputedFields: never
         Insert: {
           coach_id: string
+          court_id: string
           location_id: string
           organization_id: string
         }
         Update: {
+          coach_id?: string
+          court_id?: string
+          location_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_courts_organization_id_location_id_coach_id_fkey"
+            columns: ["organization_id", "location_id", "coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_locations"
+            referencedColumns: ["organization_id", "location_id", "coach_id"]
+          },
+          {
+            foreignKeyName: "coach_courts_organization_id_location_id_court_id_fkey"
+            columns: ["organization_id", "location_id", "court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["organization_id", "location_id", "id"]
+          },
+        ]
+      }
+      coach_locations: {
+        Row: {
+          active: boolean
+          coach_id: string
+          location_id: string
+          organization_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          active?: boolean
+          coach_id: string
+          location_id: string
+          organization_id: string
+        }
+        Update: {
+          active?: boolean
           coach_id?: string
           location_id?: string
           organization_id?: string
@@ -265,28 +305,55 @@ export type Database = {
       }
       coach_profiles: {
         Row: {
+          contact_email: string | null
+          contact_phone: string | null
           id: string
+          joined_on: string | null
           name: string
+          notes: string | null
           organization_id: string
+          pay_amount_minor: number | null
+          pay_basis: string | null
+          qualification: string | null
+          revision: number
           specialty: string | null
           status: Database["public"]["Enums"]["resource_status"]
+          updated_at: string
           user_id: string | null
         }
         ComputedFields: never
         Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
           id?: string
+          joined_on?: string | null
           name: string
+          notes?: string | null
           organization_id: string
+          pay_amount_minor?: number | null
+          pay_basis?: string | null
+          qualification?: string | null
+          revision?: number
           specialty?: string | null
           status?: Database["public"]["Enums"]["resource_status"]
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
           id?: string
+          joined_on?: string | null
           name?: string
+          notes?: string | null
           organization_id?: string
+          pay_amount_minor?: number | null
+          pay_basis?: string | null
+          qualification?: string | null
+          revision?: number
           specialty?: string | null
           status?: Database["public"]["Enums"]["resource_status"]
+          updated_at?: string
           user_id?: string | null
         }
         Relationships: [
@@ -379,29 +446,44 @@ export type Database = {
       }
       courts: {
         Row: {
+          amenities: string[]
+          capacity: number
           id: string
           location_id: string
           name: string
+          notes: string | null
           organization_id: string
+          revision: number
           status: Database["public"]["Enums"]["resource_status"]
           surface: string
+          updated_at: string
         }
         ComputedFields: never
         Insert: {
+          amenities?: string[]
+          capacity?: number
           id?: string
           location_id: string
           name: string
+          notes?: string | null
           organization_id: string
+          revision?: number
           status?: Database["public"]["Enums"]["resource_status"]
           surface: string
+          updated_at?: string
         }
         Update: {
+          amenities?: string[]
+          capacity?: number
           id?: string
           location_id?: string
           name?: string
+          notes?: string | null
           organization_id?: string
+          revision?: number
           status?: Database["public"]["Enums"]["resource_status"]
           surface?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -955,17 +1037,20 @@ export type Database = {
       }
       student_locations: {
         Row: {
+          active: boolean
           location_id: string
           organization_id: string
           student_id: string
         }
         ComputedFields: never
         Insert: {
+          active?: boolean
           location_id: string
           organization_id: string
           student_id: string
         }
         Update: {
+          active?: boolean
           location_id?: string
           organization_id?: string
           student_id?: string
@@ -989,28 +1074,49 @@ export type Database = {
       }
       student_profiles: {
         Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
           id: string
+          joined_on: string | null
           name: string
+          notes: string | null
           organization_id: string
+          revision: number
           skill_level: string | null
           status: Database["public"]["Enums"]["resource_status"]
+          updated_at: string
           user_id: string | null
         }
         ComputedFields: never
         Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
           id?: string
+          joined_on?: string | null
           name: string
+          notes?: string | null
           organization_id: string
+          revision?: number
           skill_level?: string | null
           status?: Database["public"]["Enums"]["resource_status"]
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
           id?: string
+          joined_on?: string | null
           name?: string
+          notes?: string | null
           organization_id?: string
+          revision?: number
           skill_level?: string | null
           status?: Database["public"]["Enums"]["resource_status"]
+          updated_at?: string
           user_id?: string | null
         }
         Relationships: [
@@ -1180,6 +1286,32 @@ export type Database = {
         }
         Returns: string
       }
+      resource_history: {
+        Args: {
+          p_id: string
+          p_kind: Database["public"]["Enums"]["club_resource_kind"]
+          p_org: string
+        }
+        Returns: {
+          action: string
+          actor: string
+          current_status: Database["public"]["Enums"]["resource_status"]
+          occurred_at: string
+          previous_status: Database["public"]["Enums"]["resource_status"]
+        }[]
+      }
+      save_club_resource: {
+        Args: {
+          p_id: string
+          p_kind: Database["public"]["Enums"]["club_resource_kind"]
+          p_locations: string[]
+          p_org: string
+          p_request: string
+          p_revision: number
+          p_values: Json
+        }
+        Returns: string
+      }
       set_club_member: {
         Args: {
           p_active: boolean
@@ -1191,6 +1323,33 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_court_rate: {
+        Args: {
+          p_amount: number
+          p_court: string
+          p_from: string
+          p_kind: Database["public"]["Enums"]["booking_kind"]
+          p_location: string
+          p_minutes: number
+          p_org: string
+          p_request: string
+        }
+        Returns: string
+      }
+      set_resource_hours: {
+        Args: {
+          p_end: number
+          p_from: string
+          p_id: string
+          p_kind: Database["public"]["Enums"]["club_resource_kind"]
+          p_location: string
+          p_org: string
+          p_request: string
+          p_start: number
+          p_weekday: number
+        }
+        Returns: string
+      }
       update_my_profile: {
         Args: { p_display_name: string }
         Returns: undefined
@@ -1200,6 +1359,7 @@ export type Database = {
       attendance_status: "present" | "late" | "absent" | "excused"
       booking_kind: "rental" | "private" | "group"
       booking_status: "confirmed" | "cancelled"
+      club_resource_kind: "court" | "coach" | "student"
       club_role:
         | "owner"
         | "admin"
@@ -1340,6 +1500,7 @@ export const Constants = {
       attendance_status: ["present", "late", "absent", "excused"],
       booking_kind: ["rental", "private", "group"],
       booking_status: ["confirmed", "cancelled"],
+      club_resource_kind: ["court", "coach", "student"],
       club_role: [
         "owner",
         "admin",

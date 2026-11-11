@@ -41,3 +41,10 @@ export async function isConfigured(): Promise<boolean> {
   const { rows } = await database().query<{ configured: boolean }>('select tennis_runtime.is_configured() as configured');
   return rows[0].configured;
 }
+
+export function hasManagerAccess(userId: string): Promise<boolean> {
+  return asUser(userId, async client => (await client.query<{ allowed: boolean }>(`
+    select exists (select from public.organization_members
+      where user_id=$1 and active and role in ('owner','admin')) as allowed
+  `, [userId])).rows[0].allowed);
+}

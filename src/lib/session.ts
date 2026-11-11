@@ -6,7 +6,7 @@ import type { NextResponse } from 'next/server';
 import { cache } from 'react';
 import { makeAuthClient } from '../../local/auth-client.mjs';
 import { authSecret, authUrl, sessionKey } from './config';
-import { database, transaction } from './db';
+import { database, hasManagerAccess, transaction } from './db';
 
 export const cookieName = 'sam_session';
 const lifetimeSeconds = 12 * 60 * 60;
@@ -110,6 +110,7 @@ export async function identify(value: string | undefined): Promise<WebUser | nul
     if (error && (!error.status || error.status >= 500)) throw new Error('Local Auth is unavailable.');
     return null;
   }
+  if (!(await hasManagerAccess(row.user_id))) return null;
   return { id: row.user_id, email: data.user.email ?? row.email };
 }
 

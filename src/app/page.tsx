@@ -12,7 +12,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   return <AccessShell>
     <div className="access-heading">
       <h1>{configured ? 'ورود به پنل باشگاه' : 'راه‌اندازی باشگاه'}</h1>
-      <p>{configured ? 'با حساب ثبت‌شدهٔ خود وارد شوید.' : 'حساب مالک و شعبهٔ مرکزی را روی همین سیستم بسازید.'}</p>
+      <p>{configured ? 'با حساب مالک یا مدیر شعبه وارد شوید.' : 'حساب مالک و شعبهٔ مرکزی را روی همین سیستم بسازید.'}</p>
     </div>
     <Notice error={error} />
     <form className="local-form" action={configured ? '/api/login' : '/api/setup'} method="post">
@@ -26,6 +26,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <button className="button primary">{configured ? 'ورود به پنل' : 'ساخت حساب مالک'}</button>
     </form>
     {configured && <details className="access-help"><summary>بازیابی گذرواژه</summary>
-      <p>برای حساب کارکنان از مالک پیوند بازیابی بگیرید. مالک می‌تواند با دستور <code dir="ltr">./scripts/local.sh recover OWNER_EMAIL</code> پیوند بسازد.</p></details>}
+      <p>برای حساب مدیران شعبه از مالک پیوند بازیابی بگیرید. مالک می‌تواند با دستور <code dir="ltr">./scripts/local.sh recover OWNER_EMAIL</code> پیوند بسازد.</p></details>}
   </AccessShell>;
 }
