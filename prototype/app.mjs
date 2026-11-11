@@ -1,5 +1,5 @@
 import {
-  addDays, bookingName, bookingsOn, closing, coaches, courts, dayNumber, defaultStart, durations,
+  addDays, attendanceLabels, classRoster, bookingName, bookingsOn, closing, coaches, courts, dayNumber, defaultStart, durations,
   kinds, longDate, monthDays, monthLabel, number, occupied, opening, previewMinute, seedBookings,
   shortDate, statuses, storedBookings, students, time, today, validateBooking, weekday, weekStart,
 } from './model.mjs';
@@ -9,6 +9,7 @@ const storageKey = 'tennis-club-os-preview-v1';
 const pages = [
   { id: 'dashboard', title: 'نمای کلی', icon: 'dashboard' },
   { id: 'calendar', title: 'تقویم سانس‌ها', icon: 'calendar' },
+  { id: 'classes', title: 'کلاس‌ها و حضور', icon: 'people' },
   { id: 'courts', title: 'زمین‌ها', icon: 'court' },
   { id: 'people', title: 'مربیان و شاگردان', icon: 'people' },
 ];
@@ -337,7 +338,20 @@ function peoplePage() {
     </section>`;
 }
 
-const renderPage = { dashboard, calendar, courts: courtsPage, people: peoplePage };
+function classesPage() {
+  const rows = bookings.filter(item=>item.kind!=='rental').sort((a,b)=>a.date.localeCompare(b.date) || a.start-b.start);
+  return `${pageHeading('کلاس‌ها و حضور و غیاب','برنامهٔ کلاس‌های نمونهٔ باشگاه')}
+    <section class="panel roster-panel">
+      <ul class="preview-class-list">${rows.map(item=>`
+        <li><button data-action="class" data-id="${escape(item.id)}">
+          <span><strong>${kinds[item.kind]}</strong><small>${escape(coaches.find(coach=>coach.id===item.coach)?.name ?? '')}</small></span>
+          <span><strong>${longDate(item.date)}</strong><small>${timeRange(item)} · ${number(classRoster(item).length)} شاگرد</small></span>
+          ${statusBadge(item.status)}
+        </button></li>`).join('')}</ul>
+    </section>`;
+}
+
+const renderPage = { dashboard, calendar, classes: classesPage, courts: courtsPage, people: peoplePage };
 
 function render({ focus = false } = {}) {
   const currentPage = pages.find(page => page.id === state.page);
@@ -435,11 +449,57 @@ function detail(booking) {
       <div><dt>وضعیت</dt><dd>${statusBadge(booking.status)}</dd></div>
       ${booking.reason ? `<div><dt>علت لغو</dt><dd>${escape(booking.reason)}</dd></div>` : ''}
     </dl>
-    <footer class="dialog-actions">${editable ? `
+    <footer class="dialog-actions">
+      ${booking.kind!=='rental' ? `<button class="button subtle" data-action="class" data-id="${escape(booking.id)}">کلاس و حضور و غیاب</button>` : ''}
+      ${editable ? `
       <button class="button primary" data-action="edit" data-id="${escape(booking.id)}">${icon('edit', 17)} جابه‌جایی سانس</button>
       <button class="button danger-quiet" data-action="cancel-prompt" data-id="${escape(booking.id)}">لغو سانس</button>`
       : '<button class="button subtle" data-action="close-dialog">بستن</button>'}
     </footer>`);
+}
+
+function classEditor(item) {
+  const roster = classRoster(item);
+  const upcoming = item.date>today || (item.date===today && item.start>=previewMinute);
+  const editableRoster = item.kind==='group' && item.status==='confirmed' && upcoming;
+  const editableAttendance = item.status==='completed' || (item.status==='confirmed' && !upcoming);
+  const candidates = students.filter(person=>person.active && !roster.includes(person.id));
+  const id = escape(item.id);
+  const timeInput = minute => `${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
+  showDialog(kinds[item.kind],longDate(item.date),`
+    <div class="preview-class-detail">
+      <div class="section-heading"><h3>شاگردان کلاس</h3><span>${number(roster.length)} از ${number(item.kind==='group'?6:1)} نفر</span></div>
+      ${roster.length ? `<ul class="roster-list">${roster.map(person=>`<li>
+        <div><strong>${students.find(student=>student.id===person)?.name ?? ''}</strong>
+          <small>${attendanceLabels[item.attendance?.[person]] ?? ''}</small></div>
+        ${editableRoster ? `<button class="button danger-quiet" data-action="class-remove" data-id="${id}" data-student="${person}">لغو ثبت‌نام</button>` : ''}
+      </li>`).join('')}</ul>` : '<p>هنوز شاگردی ثبت نشده است.</p>'}
+      ${editableRoster && candidates.length && roster.length<6 ? `
+        <form id="preview-enroll" class="preview-class-form" data-id="${id}">
+          <label class="field"><span>شاگرد فعال</span><select name="student" required>${options([['','انتخاب شاگرد'],...candidates.map(person=>[person.id,person.name])],'')}</select></label>
+          <p class="form-error" id="booking-error" role="alert" hidden></p>
+          <button class="button primary">افزودن شاگرد</button>
+        </form>` : ''}
+      ${editableAttendance ? `<form id="preview-attendance" class="preview-class-form" data-id="${id}">
+        <h3>حضور و غیاب</h3>
+        <div class="form-grid">
+          <label class="field"><span>شروع واقعی</span><input name="start" type="time" dir="ltr" value="${timeInput(item.actualStart ?? item.start)}" required></label>
+          <label class="field"><span>پایان واقعی</span><input name="end" type="time" dir="ltr" value="${timeInput(item.actualEnd ?? item.start+item.duration)}" required></label>
+        </div>
+        ${roster.map(person=>`<label class="field"><span>حضور ${students.find(student=>student.id===person)?.name ?? ''}</span>
+          <select name="mark.${person}" required>${options([['','انتخاب وضعیت'],...Object.entries(attendanceLabels)],item.attendance?.[person] ?? '')}</select>
+        </label>`).join('')}
+        ${item.status==='completed' ? `<label class="field"><span>علت اصلاح</span><input name="reason" maxlength="250" required></label>` : ''}
+        <p class="form-error" id="booking-error" role="alert" hidden></p>
+        <button class="button primary">${item.status==='completed'?'ذخیرهٔ اصلاح':'ثبت برگزاری'}</button>
+        ${item.attendanceReason ? `<small>آخرین اصلاح · ${escape(item.attendanceReason)}</small>` : ''}
+      </form>` : ''}
+    </div>`);
+}
+
+function updateDemoClass(item,update,message) {
+  bookings = bookings.map(booking=>booking.id===item.id ? { ...item,...update } : booking);
+  complete(message);
 }
 
 function cancelPrompt(booking) {
@@ -491,6 +551,34 @@ function formError(form, { field, message }) {
 
 dialog.addEventListener('submit', event => {
   const form = event.target;
+  if (form.id === 'preview-enroll' || form.id === 'preview-attendance') {
+    event.preventDefault();
+    const item = bookings.find(booking=>booking.id===form.dataset.id);
+    if (!item || item.kind==='rental' || item.status==='cancelled') return;
+    const values = new FormData(form);
+    if (form.id==='preview-enroll') {
+      const roster = [...classRoster(item),String(values.get('student'))];
+      const error = validateBooking({ ...item,roster,student:roster[0] },bookings);
+      if (error) return formError(form,error);
+      updateDemoClass(item,{roster,student:roster[0]},'شاگرد به کلاس اضافه شد.');
+    } else {
+      const minute = value => {
+        const [hour,min] = String(value).split(':').map(Number);
+        return hour*60+min;
+      };
+      const actualStart=minute(values.get('start'));
+      const actualEnd=minute(values.get('end'));
+      if (!Number.isInteger(actualStart) || !Number.isInteger(actualEnd) || actualStart>=actualEnd ||
+          (item.date===today && actualEnd>previewMinute)) {
+        return formError(form,{field:'end',message:'زمان واقعی را بررسی کنید. کلاس باید پایان یافته باشد.'});
+      }
+      const reason=String(values.get('reason') ?? '').trim();
+      if (item.status==='completed' && !reason) return formError(form,{field:'reason',message:'علت اصلاح را وارد کنید.'});
+      const attendance=Object.fromEntries(classRoster(item).map(person=>[person,values.get('mark.'+person)]));
+      updateDemoClass(item,{status:'completed',actualStart,actualEnd,attendance,attendanceReason:reason},'حضور و برگزاری کلاس ثبت شد.');
+    }
+    return;
+  }
   if (form.id === 'cancel-form') {
     event.preventDefault();
     const reason = String(new FormData(form).get('reason') ?? '').trim();
@@ -566,6 +654,12 @@ function changeDate(step) {
 
 const actions = {
   new: target => reserveForm(target.dataset),
+  class: (_,booking) => { if (booking?.kind && booking.kind!=='rental') classEditor(booking); },
+  'class-remove': (target,booking) => {
+    if (!booking || booking.status!=='confirmed' || booking.kind!=='group') return;
+    const roster=classRoster(booking).filter(id=>id!==target.dataset.student);
+    updateDemoClass(booking,{roster,student:roster[0] ?? ''},'ثبت‌نام شاگرد لغو شد.');
+  },
   detail: (_, booking) => { if (booking) detail(booking); },
   edit: (_, booking) => { if (booking?.status === 'confirmed') reserveForm({}, booking); },
   'close-dialog': () => dialog.close(),

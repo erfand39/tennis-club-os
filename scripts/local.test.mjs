@@ -318,6 +318,94 @@ test('local calendar, price review and concurrent reservation use persisted bran
   assert.match((await groupPage.text()).replaceAll('<!-- -->',''),/۸ نفر/);
 });
 
+test('class roster and attendance stay consistent with capacity, correction and access', async () => {
+  const {rows:[future]}=await db.query(`
+    select s.id,s.booking_id,b.court_id,s.coach_id,b.slot
+    from public.sessions s join public.bookings b on b.id=s.booking_id join public.courts c on c.id=b.court_id
+    where s.organization_id=$1 and s.location_id=$2 and b.kind='group' and c.name='زمین زمان‌بندی سه'
+  `,[org,branch]);
+  assert(future);
+  await db.query('update public.sessions set capacity=1 where id=$1',[future.id]);
+  const {rows:people}=await db.query(`
+    insert into public.student_profiles (organization_id,name)
+    select $1,'شاگرد حضور '||i from generate_series(1,4) i returning id`,[org]);
+  for (const person of people) {
+    await db.query('insert into public.student_locations (organization_id,location_id,student_id) values ($1,$2,$3)',[org,branch,person.id]);
+  }
+  const submit=(action,id,values,cookie=owner,scope=branch)=>post('class-'+action,{org,branch:scope,session:id,request:randomUUID(),...values},cookie);
+  const path=`/club/${org}/classes/${future.id}`;
+  assert.equal((await get(path,owner)).status,200);
+  assert.equal((await get(path)).status,307);
+  const attempts=await Promise.all(people.slice(0,2).map(person=>submit('enroll',future.id,{student:person.id})));
+  assert.deepEqual(attempts.map(result=>result.status).sort(),[200,409]);
+  assert.equal((await attempts.find(result=>result.status===409).json()).error,'attendance-full');
+  const {rows:[enrolled]}=await db.query('select id,student_id from public.session_participants where session_id=$1',[future.id]);
+  const duplicate=await submit('enroll',future.id,{student:enrolled.student_id});
+  assert.equal(duplicate.status,409);
+  assert.equal((await duplicate.json()).error,'attendance-duplicate');
+  const withdrawal={participant:enrolled.id,request:randomUUID()};
+  assert.equal((await submit('withdraw',future.id,withdrawal)).status,200);
+  assert.equal((await submit('withdraw',future.id,withdrawal)).status,200);
+  assert.equal((await db.query('select active from tennis_private.student_allocations where participant_id=$1',[enrolled.id])).rows[0].active,false);
+  assert.match(await (await get(path,owner)).text(),/ثبت‌نام‌های لغوشده/);
+  assert.equal((await submit('enroll',future.id,{student:enrolled.student_id})).status,200);
+  assert.deepEqual((await db.query(`select p.id,p.withdrawn_at,a.active from public.session_participants p
+    join tennis_private.student_allocations a on a.participant_id=p.id where p.session_id=$1`,[future.id])).rows,
+  [{id:enrolled.id,withdrawn_at:null,active:true}]);
+
+  const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const localTimes=[yesterday+'T10:00',yesterday+'T11:00'];
+  const {rows:[actor]}=await db.query('select id from auth.users where email=$1',[ownerEmail]);
+  const {rows:[historical]}=await db.query(`
+    insert into public.bookings (organization_id,location_id,court_id,slot,timezone,kind,created_by)
+    values ($1,$2,$3,tstzrange($4::timestamp at time zone 'Asia/Tehran',$5::timestamp at time zone 'Asia/Tehran','[)'),
+      'Asia/Tehran','group',$6) returning id`,[org,branch,future.court_id,...localTimes,actor.id]);
+  const {rows:[session]}=await db.query(`insert into public.sessions (organization_id,location_id,booking_id,coach_id,capacity)
+    values ($1,$2,$3,$4,5) returning id`,[org,branch,historical.id,future.coach_id]);
+  const {rows:participants}=await db.query(`insert into public.session_participants (organization_id,location_id,session_id,student_id)
+    select $1,$2,$3,id from unnest($4::uuid[]) id returning id`,[org,branch,session.id,people.map(person=>person.id)]);
+  const [start,end]=localTimes;
+  const marks=Object.fromEntries(participants.map((person,index)=>['attendance.'+person.id,['present','late','absent','excused'][index]]));
+  const fields={start,end,revision:'0',booking_revision:'0',...marks,request:randomUUID()};
+  const insufficient=await submit('attendance',session.id,{start,end,revision:'0',booking_revision:'0'});
+  assert.equal(insufficient.status,400);
+  assert.equal((await insufficient.json()).error,'attendance-incomplete');
+  const badTime=await submit('attendance',session.id,{...fields,start:yesterday+'T12:00'});
+  assert.equal(badTime.status,400);
+  assert.equal((await db.query('select status from public.sessions where id=$1',[session.id])).rows[0].status,'scheduled');
+  const first=await submit('attendance',session.id,fields);
+  assert.equal(first.status,200,await first.text());
+  assert.equal((await submit('attendance',session.id,fields)).status,200);
+  const stale=await submit('attendance',session.id,{...fields,request:randomUUID(),reason:'اصلاح'});
+  assert.equal(stale.status,409);
+  assert.equal((await stale.json()).error,'attendance-stale');
+  const noReason=await submit('attendance',session.id,{...fields,request:randomUUID(),revision:'1'});
+  assert.equal(noReason.status,400);
+  assert.equal((await noReason.json()).error,'attendance-reason');
+  const correction=await submit('attendance',session.id,{...fields,request:randomUUID(),revision:'1',
+    ['attendance.'+participants[0].id]:'late',reason:'اصلاح زمان حضور'});
+  assert.equal(correction.status,200,await correction.text());
+  const {rows:records}=await db.query('select participant_id,status from public.attendance_records where participant_id=any($1::uuid[])',
+    [participants.map(person=>person.id)]);
+  assert.equal(records.length,4);
+  assert.equal(records.find(record=>record.participant_id===participants[0].id).status,'late');
+  const {rows:events}=await db.query(`select details from tennis_private.audit_events where target_id=$1 and action='record_class_attendance' order by id`,[session.id]);
+  assert.equal(events.length,2);
+  assert.equal(events[1].details.before[participants[0].id],'present');
+  assert.equal(events[1].details.after[participants[0].id],'late');
+  const page=await get(`/club/${org}/classes/${session.id}`,owner);
+  assert.equal(page.status,200);
+  assert.match(await page.text(),/اصلاح زمان حضور/);
+  assert.match(await (await get(`/club/${org}/classes?branch=${branch}&date=${yesterday}&status=completed`,owner)).text(),/برگزارشده/);
+  assert.equal((await submit('attendance',session.id,fields,owner,secondBranch)).status,403);
+
+  const {rows:[cancelled]}=await db.query(`
+    update public.sessions set status='cancelled' where id=$1 returning id`,[future.id]);
+  const rejected=await submit('attendance',cancelled.id,{start,end,revision:'3',booking_revision:'0'});
+  assert.equal(rejected.status,409);
+  assert.equal((await rejected.json()).error,'attendance-closed');
+});
+
 test('leaving preserves the audit trail and removes club access', async () => {
   const manager=identities.get('admin');
   const login=await post('login',{email:manager.email,password:`${password}-next`});

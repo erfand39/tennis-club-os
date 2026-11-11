@@ -214,3 +214,20 @@
   .calendar-row .resource-status { grid-column: 2; }
   .calendar-detail, .calendar-inputs { grid-template-columns: 1fr; }
 }
+
+.class-period { margin-top: 4px; }
+.class-period h2 { font-size: 15px; }
+.class-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) auto; }
+.class-summary { max-width: 760px; }
+.class-totals { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-bottom: 12px; }
+.class-roster-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.class-roster-row a, .class-attendance-field span { overflow-wrap: anywhere; }
+.class-roster .resource-disclosure { margin: 0 0 6px; border-top: 0; }
+.class-roster + .resource-disclosure { margin-top: 10px; }
+.class-attendance-field { display: grid; grid-template-columns: minmax(0,1fr) minmax(125px,1fr); gap: 6px; align-items: center; }
+.class-history { margin-top: 14px; }
+.class-history h3 { font-size: 13px; margin: 0 0 5px; }
+@media (max-width: 630px) {
+  .class-row, .class-totals { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .class-attendance-field { grid-template-columns: minmax(0,1fr) minmax(110px,1fr); }
+}

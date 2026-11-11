@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { branches, uuid } from '@/lib/club';
 import { calendarBooking, calendarBookingOptions, calendarCourts } from '@/lib/calendar';
 import { branchDateTime, calendarDateTime, calendarPath, longDay, numberFa, validCalendarDate } from '@/lib/calendar-dates';
+import { classesPath } from '@/lib/class-fields';
 import { errorMessage } from '@/lib/messages';
 import { bookingKinds, resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
@@ -79,6 +80,7 @@ export default async function BookingPage({ params, searchParams }: {
           <div><dt>مبلغ ثبت‌شده</dt><dd>{detail.amount!==null && detail.currency ? displayPrice(detail.amount,detail.currency) : '—'}</dd></div>
           {detail.cancellation_reason && <div><dt>علت لغو</dt><dd>{detail.cancellation_reason}</dd></div>}
         </dl>
+        {detail.session_id && <Link className="button subtle" href={classesPath(org,detail.session_id)}>کلاس و حضور و غیاب</Link>}
         {canChange && branch.active && <details className="resource-disclosure">
           <summary>جابه‌جایی سانس</summary><p>تاریخ یا ساعت شروع را تغییر دهید. زمین، مدت و مبلغ ثبت‌شده حفظ می‌شوند.</p>
           <ResourceCommand action="booking-move" label="ثبت جابه‌جایی">

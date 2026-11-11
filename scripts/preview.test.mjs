@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   addDays, bookingsOn, defaultStart, longDate, monthDays, occupied, seedBookings,
-  storedBookings, today, validateBooking, weekStart,
+  previewMinute, storedBookings, today, validateBooking, weekStart,
 } from '../prototype/model.mjs';
 
 const rental = {
@@ -12,7 +12,7 @@ const rental = {
 
 test('seed bookings are loadable and upcoming bookings satisfy booking rules', () => {
   assert.deepEqual(storedBookings(JSON.parse(JSON.stringify(seedBookings))), seedBookings);
-  for (const booking of seedBookings.filter(row => row.status === 'confirmed')) {
+  for (const booking of seedBookings.filter(row => row.status === 'confirmed' && (row.date > today || (row.date===today && row.start>=previewMinute)))) {
     assert.equal(validateBooking(booking, seedBookings), null, booking.id);
   }
 });
@@ -27,6 +27,8 @@ test('coach and student conflicts are independent of the court', () => {
   assert.equal(validateBooking({ ...lesson, coach: 'kiani', student: 'amini' }, seedBookings).field, 'coach');
   assert.equal(validateBooking({ ...lesson, coach: 'moradi', student: 'rad' }, seedBookings).field, 'student');
   assert.equal(validateBooking({ ...lesson, coach: 'moradi', student: 'rahimi' }, seedBookings), null);
+  const group = { ...lesson, kind:'group', coach:'moradi', student:'amini', roster:['amini','rad'] };
+  assert.equal(validateBooking(group,seedBookings).field,'student');
 });
 
 test('unavailable courts, past dates, invalid dates and closing time are rejected', () => {

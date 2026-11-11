@@ -29,6 +29,8 @@ export const kinds = {
   group: 'کلاس گروهی',
 };
 
+export const attendanceLabels = { present:'حاضر',late:'با تأخیر',absent:'غایب',excused:'غیبت موجه' };
+export const classRoster = booking => booking.roster ?? (booking.student ? [booking.student] : []);
 export const durations = [30, 60, 90, 120];
 export const statuses = { confirmed: 'تأییدشده', completed: 'برگزارشده', cancelled: 'لغوشده' };
 const dateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
@@ -96,7 +98,10 @@ export function time(minute) {
   return `${hours}:${minutes}`.replace(/\d/g, digit => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
 }
 function makeBooking(id, date, court, start, duration, kind, name, status = 'confirmed', coach = '', student = '') {
-  return { id, date, court, start, duration, kind, name, status, coach, student };
+  const item = { id, date, court, start, duration, kind, name, status, coach, student };
+  return kind!=='rental' && status==='completed'
+    ? { ...item,actualStart:start,actualEnd:start+duration,attendance:{[student]:'present'} }
+    : item;
 }
 
 export const seedBookings = [
@@ -116,7 +121,7 @@ export const seedBookings = [
   makeBooking('tomorrow-2', addDays(today, 1), 'three', 960, 90, 'group', '', 'confirmed', 'moradi', 'rahimi'),
   makeBooking('day-after-1', addDays(today, 2), 'two', 1050, 120, 'rental', 'مهدی نوروزی'),
   makeBooking('next-week-1', addDays(today, 6), 'one', 840, 60, 'rental', 'سام خسروی'),
-  makeBooking('yesterday-1', addDays(today, -1), 'two', 810, 60, 'private', '', 'completed', 'kiani', 'rad'),
+  makeBooking('yesterday-1', addDays(today, -1), 'two', 810, 60, 'private', '', 'confirmed', 'kiani', 'rad'),
 ];
 
 export function bookingName(booking) {
@@ -158,7 +163,8 @@ export function validateBooking(draft, bookings) {
   if (draft.kind !== 'rental' && !coaches.some(coach => coach.id === draft.coach && coach.active)) {
     return { field: 'coach', message: 'یک مربی فعال انتخاب کنید.' };
   }
-  if (draft.kind !== 'rental' && !students.some(student => student.id === draft.student && student.active)) {
+  const roster = classRoster(draft);
+  if ((draft.kind === 'private' && roster.length!==1) || roster.some(id=>!students.some(student=>student.id===id && student.active))) {
     return { field: 'student', message: 'یک شاگرد فعال انتخاب کنید.' };
   }
 
@@ -169,11 +175,11 @@ export function validateBooking(draft, bookings) {
   const resources = [
     { field: 'court', label: 'زمین', id: draft.court },
     { field: 'coach', label: 'مربی', id: draft.coach },
-    { field: 'student', label: 'شاگرد', id: draft.student },
+    ...roster.map(id=>({ field:'student',label:'شاگرد',id })),
   ];
   for (const resource of resources) {
     if (!resource.id) continue;
-    const conflict = overlaps.find(booking => booking[resource.field] === resource.id);
+    const conflict = overlaps.find(booking => resource.field==='student' ? classRoster(booking).includes(resource.id) : booking[resource.field]===resource.id);
     if (conflict) {
       return {
         field: resource.field,
@@ -211,7 +217,17 @@ export function storedBookings(value) {
         (row.reason !== undefined && (row.status !== 'cancelled' || typeof row.reason !== 'string' || !row.reason.trim() || row.reason.length>250)) ||
         (row.kind === 'rental' && (row.coach || row.student || row.name.trim().length < 2)) ||
         (row.kind !== 'rental' && (!coaches.some(coach => coach.id === row.coach) ||
-          !students.some(student => student.id === row.student)))) return null;
+          (row.student ? !students.some(student => student.id === row.student) : row.kind==='private')))) return null;
+    if (row.roster !== undefined && (row.kind!=='group' || !Array.isArray(row.roster) || row.roster.length>6 ||
+        new Set(row.roster).size!==row.roster.length || row.roster.some(id=>!students.some(student=>student.id===id)) ||
+        (row.roster[0] ?? '')!==row.student)) return null;
+    if (row.attendance !== undefined && (row.kind==='rental' || row.status!=='completed' || !row.attendance ||
+        typeof row.attendance!=='object' || Array.isArray(row.attendance) ||
+        Object.keys(row.attendance).length!==classRoster(row).length ||
+        classRoster(row).some(id=>!Object.hasOwn(attendanceLabels,row.attendance[id])) ||
+        !Number.isInteger(row.actualStart) || !Number.isInteger(row.actualEnd) || row.actualStart<0 ||
+        row.actualEnd<=row.actualStart || row.actualEnd>1440 ||
+        (row.attendanceReason!==undefined && (typeof row.attendanceReason!=='string' || row.attendanceReason.length>250)))) return null;
     ids.add(row.id);
   }
   return value;

@@ -5,6 +5,8 @@ import { asUser, database, hasManagerAccess, isConfigured } from '@/lib/db';
 import { clubFor, members, uuid } from '@/lib/club';
 import { type ClubRole, roles } from '@/lib/roles';
 import { isBookingAction, runBookingAction } from '@/lib/booking-commands';
+import { isClassAction, runClassAction } from '@/lib/class-commands';
+import { classesPath } from '@/lib/class-fields';
 import { calendarPath } from '@/lib/calendar-dates';
 import { InputError } from '@/lib/input';
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
@@ -186,6 +188,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       errorPath = `/club/${org}/profile`;
       await asUser(user.id, db => db.query('select public.leave_club($1)', [org]));
       return go('/club');
+    }
+    if (isClassAction(action)) {
+      const session = fields.get('session') ?? '';
+      errorPath = classesPath(org,uuid(session) ? session : undefined);
+      const next = await runClassAction(action,fields,user.id,org);
+      return wantsJson ? NextResponse.json({ next }) : go(next);
     }
     if (isBookingAction(action)) {
       const booking = fields.get('booking') ?? '';

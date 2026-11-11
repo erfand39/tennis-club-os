@@ -111,7 +111,7 @@ const calendarJoins = {
   students: { join: `join public.sessions s on s.booking_id=b.id
     join public.session_participants sp on sp.session_id=s.id
     left join public.attendance_records ar on ar.participant_id=sp.id`,
-    filter: 'sp.student_id=$2', attendance: 'ar.status::text' },
+    filter: 'sp.student_id=$2 and sp.withdrawn_at is null', attendance: 'ar.status::text' },
 } as const;
 
 export function resourceRecords(user: string, org: string, kind: ResourceKind, id: string) {

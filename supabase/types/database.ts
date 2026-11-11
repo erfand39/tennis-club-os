@@ -944,6 +944,7 @@ export type Database = {
           registered_at: string
           session_id: string
           student_id: string
+          withdrawn_at: string | null
         }
         ComputedFields: never
         Insert: {
@@ -953,6 +954,7 @@ export type Database = {
           registered_at?: string
           session_id: string
           student_id: string
+          withdrawn_at?: string | null
         }
         Update: {
           id?: string
@@ -961,6 +963,7 @@ export type Database = {
           registered_at?: string
           session_id?: string
           student_id?: string
+          withdrawn_at?: string | null
         }
         Relationships: [
           {
@@ -989,6 +992,7 @@ export type Database = {
           location_id: string
           organization_id: string
           program_id: string | null
+          revision: number
           status: Database["public"]["Enums"]["session_status"]
         }
         ComputedFields: never
@@ -1001,6 +1005,7 @@ export type Database = {
           location_id: string
           organization_id: string
           program_id?: string | null
+          revision?: number
           status?: Database["public"]["Enums"]["session_status"]
         }
         Update: {
@@ -1012,6 +1017,7 @@ export type Database = {
           location_id?: string
           organization_id?: string
           program_id?: string | null
+          revision?: number
           status?: Database["public"]["Enums"]["session_status"]
         }
         Relationships: [
@@ -1199,6 +1205,15 @@ export type Database = {
         }
         Returns: string
       }
+      class_attendance_history: {
+        Args: { p_location: string; p_org: string; p_session: string }
+        Returns: {
+          actor: string
+          corrected: boolean
+          reason: string
+          recorded_at: string
+        }[]
+      }
       close_location: {
         Args: {
           p_end: string
@@ -1260,6 +1275,21 @@ export type Database = {
         Returns: string
       }
       leave_club: { Args: { p_org: string }; Returns: undefined }
+      record_class_attendance: {
+        Args: {
+          p_attendance: Json
+          p_booking_revision: number
+          p_end: string
+          p_location: string
+          p_org: string
+          p_reason: string
+          p_request: string
+          p_revision: number
+          p_session: string
+          p_start: string
+        }
+        Returns: string
+      }
       record_payment: {
         Args: {
           p_amount: number
@@ -1377,6 +1407,16 @@ export type Database = {
       update_my_profile: {
         Args: { p_display_name: string }
         Returns: undefined
+      }
+      withdraw_session_participant: {
+        Args: {
+          p_location: string
+          p_org: string
+          p_participant: string
+          p_request: string
+          p_session: string
+        }
+        Returns: string
       }
     }
     Enums: {

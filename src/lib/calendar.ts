@@ -8,7 +8,7 @@ export type CalendarCourt = { id: string; name: string; surface: string; status:
 export type Booking = {
   id: string; location_id: string; court_id: string; court: string; starts_at: Date; ends_at: Date; timezone: string;
   local_day: string; kind: BookingKind; status: 'confirmed'|'cancelled'; booker_name: string | null;
-  coach: string | null; session_status: 'scheduled'|'completed'|'cancelled'|null; capacity: number|null;
+  coach: string | null; session_id: string|null; session_status: 'scheduled'|'completed'|'cancelled'|null; capacity: number|null;
 };
 type CalendarDay = { day: string; confirmed: number; completed: number; cancelled: number };
 type FreeWindow = { court_id: string; start_at: Date; end_at: Date };
@@ -16,7 +16,7 @@ type Person = { id: string; name: string };
 const pageSize = 30;
 const bookingColumns = ` b.id,b.location_id,b.court_id,c.name as court,b.starts_at,b.ends_at,b.timezone,
     timezone($3,b.starts_at)::date::text as local_day,b.kind,b.status,b.booker_name,
-    cp.name as coach,s.status as session_status,s.capacity
+    cp.name as coach,s.id as session_id,s.status as session_status,s.capacity
 `;
 const bookingTables = `
   from public.bookings b
@@ -130,7 +130,7 @@ export function calendarBooking(user: string, org: string, branches: Branch[], i
       select p.id,p.name as name from public.session_participants j
       join public.sessions s on (s.organization_id,s.location_id,s.id)=(j.organization_id,j.location_id,j.session_id)
       join public.student_profiles p on (p.organization_id,p.id)=(j.organization_id,j.student_id)
-      where s.organization_id=$1 and s.location_id=$2 and s.booking_id=$3 order by p.name,p.id
+      where s.organization_id=$1 and s.location_id=$2 and s.booking_id=$3 and j.withdrawn_at is null order by p.name,p.id
     `,[org,branch.id,id])).rows;
     const history = (await db.query<History>('select * from public.calendar_booking_history($1,$2,$3)',[org,branch.id,id])).rows;
     return { detail,branch,students,history };
