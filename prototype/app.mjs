@@ -4,15 +4,9 @@ import {
   shortDate, statuses, storedBookings, students, time, today, validateBooking, weekday, weekStart,
 } from './model.mjs';
 import { icon } from './icons.mjs';
+import { previewPanels as pages } from './preview-nav.mjs';
 
 const storageKey = 'tennis-club-os-preview-v1';
-const pages = [
-  { id: 'dashboard', title: 'نمای کلی', icon: 'dashboard' },
-  { id: 'calendar', title: 'تقویم سانس‌ها', icon: 'calendar' },
-  { id: 'classes', title: 'کلاس‌ها و حضور', icon: 'people' },
-  { id: 'courts', title: 'زمین‌ها', icon: 'court' },
-  { id: 'people', title: 'مربیان و شاگردان', icon: 'people' },
-];
 const views = { day: 'روزانه', week: 'هفتگی', month: 'ماهانه' };
 const activeCourts = courts.filter(court => court.active);
 const root = document.querySelector('#app');
@@ -79,38 +73,13 @@ function newButton(date = today) {
   return `<button class="button primary" data-action="new" data-date="${date}" ${date < today ? 'disabled' : ''}>${icon('plus')}<span>رزرو سانس</span></button>`;
 }
 
-function navLinks(className) {
-  return `<nav class="${className}" aria-label="ناوبری اصلی">${pages.map(page => `
-    <a href="#${page.id}" data-nav="${page.id}">${icon(page.icon)}<span>${page.title}</span></a>`).join('')}</nav>`;
-}
-
-root.innerHTML = `
-  <aside class="sidebar">
-    <a href="#dashboard" class="brand">
-      <img src="./assets/court-icon.svg" width="43" height="43" alt="">
-      <span><strong>باشگاه تنیس سام</strong><small dir="ltr">SAM TENNIS CLUB</small></span>
-    </a>
-    ${navLinks('side-nav')}
-    <div class="sidebar-bottom">
-      <a class="sidebar-help" href="./notifications.html">${icon('info',18)} اعلان‌ها</a>
-      <a class="sidebar-help" href="./reports.html">${icon('dashboard',18)} گزارش‌ها</a>
-      <a class="sidebar-help" href="./finance.html">${icon('dashboard',18)} امور مالی</a>
-      <a class="sidebar-help" href="./manage.html">${icon('people', 18)} مدیریت پرونده‌ها</a>
-      <a class="sidebar-help" href="./access.html">${icon('people', 18)} نمونهٔ ورود و دسترسی</a>
-      <button class="sidebar-help" data-action="help">${icon('info', 18)} نمونهٔ تعاملی</button>
-      <div class="profile"><span class="avatar">م</span><span><strong>مدیر باشگاه</strong><small>شعبهٔ مرکزی</small></span></div>
-    </div>
-  </aside>
-  <div class="workspace">
-    <header class="topbar">
-      <a href="#dashboard" class="mobile-brand" aria-label="باشگاه تنیس سام"><img src="./assets/court-icon.svg" width="34" height="34" alt=""></a>
-      <div class="breadcrumbs"><span>پنل باشگاه</span><span class="breadcrumb-arrow">${icon('chevronLeft', 14)}</span><strong id="current-page"></strong></div>
-      <span class="branch">${icon('pin', 16)} شعبهٔ مرکزی</span>
-      <button class="icon-button mobile-help" aria-label="دربارهٔ نمونهٔ تعاملی" data-action="help">${icon('info')}</button>
-    </header>
-    <main id="main-content" class="content" tabindex="-1"></main>
-  </div>
-  ${navLinks('mobile-nav')}
+root.querySelector('.workspace').innerHTML = `
+  <header class="topbar">
+    <div class="breadcrumbs"><span>پنل باشگاه</span><span class="breadcrumb-arrow">${icon('chevronLeft', 14)}</span><strong id="current-page"></strong></div>
+    <span class="branch">${icon('pin', 16)} شعبهٔ مرکزی</span>
+    <button class="icon-button demo-help" aria-label="دربارهٔ نمونهٔ تعاملی" data-action="help">${icon('info')}</button>
+  </header>
+  <main id="main-content" class="content" tabindex="-1"></main>
 `;
 
 const main = document.querySelector('#main-content');

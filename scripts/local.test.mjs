@@ -125,6 +125,26 @@ test('manager-only invitations and branch isolation', async () => {
 
 });
 
+test('club navigation stays the same across sections for each authorized role', async () => {
+  const root = `/club/${org}`;
+  const sections = ['', '/calendar', '/classes', '/finance', '/finance/operations', '/reports', '/notifications', '/resources/courts', '/profile'];
+  for (const [role, cookie] of [['owner', owner], ['admin', identities.get('admin').cookie]]) {
+    let expected;
+    for (const section of sections) {
+      const response = await get(root + section, cookie);
+      assert.equal(response.status, 200, section);
+      const html = await response.text();
+      const menu = [...html.matchAll(/<nav class="club-nav" aria-label="ناوبری باشگاه">([\s\S]*?)<\/nav>/g)];
+      assert.equal(menu.length, 1, section);
+      const links = [...menu[0][1].matchAll(/href="([^"]+)"/g)].map(link => link[1]);
+      expected ??= links;
+      assert.deepEqual(links, expected, section);
+      assert.equal(links.includes(root + '/members'), role === 'owner');
+      assert.equal([...menu[0][1].matchAll(/aria-current="page"/g)].length, 1, section);
+    }
+  }
+});
+
 test('concurrent refresh preserves a single valid local session', async () => {
   const { cookie, id } = identities.get('admin');
   await db.query("update tennis_runtime.web_sessions set access_expires_at=now()-interval '1 second' where user_id=$1", [id]);

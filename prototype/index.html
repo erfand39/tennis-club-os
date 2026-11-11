@@ -8,6 +8,7 @@
   <title>باشگاه تنیس سام | Tennis Club OS</title>
   <link rel="icon" href="./assets/court-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./local.css">
   <script type="module" src="./app.mjs"></script>
   <link rel="manifest" href="./pwa/manifest.webmanifest">
   <link rel="apple-touch-icon" href="./pwa/apple-icon.png">
@@ -17,8 +18,9 @@
 </head>
 <body>
   <a class="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
-  <div id="app" class="shell">
-    <p class="boot-state" role="status">در حال آماده‌سازی برنامهٔ باشگاه…</p>
+  <div id="app" class="local-shell">
+    <!-- preview-sidebar -->
+    <div class="workspace"><p class="boot-state" role="status">در حال آماده‌سازی برنامهٔ باشگاه…</p></div>
   </div>
   <noscript>برای استفاده از نمونهٔ تعاملی، جاوااسکریپت مرورگر را فعال کنید.</noscript>
   <dialog id="dialog" class="dialog" aria-labelledby="dialog-title"></dialog>

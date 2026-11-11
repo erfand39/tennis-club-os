@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile, readdir } from 'node:fs/promises';
+import { previewPanels, previewSidebar } from '../prototype/preview-nav.mjs';
 import {
   addDays, bookingsOn, defaultStart, longDate, monthDays, occupied, seedBookings,
   previewMinute, storedBookings, today, validateBooking, weekStart,
@@ -64,4 +66,24 @@ test('Jalali month and Saturday-based week match the sample date', () => {
   assert.equal(dates[0], '2026-10-23');
   assert.equal(dates.at(-1), '2026-11-21');
   assert.equal(defaultStart(seedBookings, today, 'one'), 900);
+});
+
+test('all preview screens use one ordered menu and identify the active page', async () => {
+  const source = new URL('../prototype/', import.meta.url);
+  const pages = (await readdir(source)).filter(name => name.endsWith('.html'));
+  const panels = previewPanels.map(panel => panel.id);
+  const links = markup => [...markup.matchAll(/href="([^"]+)" data-nav="([^"]+)"( aria-current="page")?/g)]
+    .map(([, href, id, active]) => ({ href, id, active: Boolean(active) }));
+  const baseline = links(previewSidebar('dashboard')).map(({ href, id }) => ({ href, id }));
+  assert.equal(baseline.length, 12);
+  for (const page of pages) {
+    const html = await readFile(new URL(page, source), 'utf8');
+    assert.equal(html.split('<!-- preview-sidebar -->').length, 2, page);
+    assert.doesNotMatch(html, /class="local-sidebar"/, page);
+  }
+  for (const current of new Set([...panels, ...pages.filter(page => page !== 'index.html').map(page => page.slice(0, -5))])) {
+    const actual = links(previewSidebar(current));
+    assert.deepEqual(actual.map(({ href, id }) => ({ href, id })), baseline, current);
+    assert.deepEqual(actual.filter(link => link.active).map(link => link.id), [current]);
+  }
 });

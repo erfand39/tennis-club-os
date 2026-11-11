@@ -50,13 +50,8 @@
   .notice-actions form button { width:100%; }
 }
 
-.local-sidebar .club-nav-mobile { display:none; }
 .demo-actions { display:flex;flex-wrap:wrap;gap:.4rem; }
 @media (max-width:630px) {
-  .local-sidebar .club-nav-desktop { display:none; }
-  .local-sidebar .club-nav-mobile { display:grid;gap:.1rem; }
-  .club-nav-main,.club-nav-more { display:flex;flex-wrap:wrap;gap:.2rem; }
-  .club-nav-mobile summary { cursor:pointer;min-height:44px;padding:.5rem .65rem;color:var(--forest);font-size:.85rem;font-weight:700; }
   .demo-actions .button { min-height:44px; }
 }
 @media (max-width:520px) {

@@ -260,3 +260,18 @@
 .credit-use { align-items: start !important; flex-wrap: wrap; }
 .credit-use details { min-width: min(100%,200px); }
 @media (max-width: 630px) { .operations-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+.local-sidebar .club-nav a { display: flex; align-items: center; gap: 8px; line-height: 1.35; min-height: 40px; }
+.preview-sidebar { gap: 18px; }
+.preview-sidebar .local-brand img { flex: none; }
+@media (min-width: 841px) {
+  .local-sidebar { position: sticky; inset-block-start: 0; align-self: start; min-height: 100dvh; max-height: 100dvh; overflow-y: auto; }
+}
+@media (max-width: 1050px) {
+  .local-shell > .access-shell { grid-template-columns: minmax(0, 1fr); }
+  .local-shell > .access-shell .access-image { display: none; }
+}
+@media (max-width: 840px) {
+  .local-sidebar .club-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr)); gap: 3px; }
+  .local-sidebar .club-nav a { min-height: 44px; padding: 7px 8px; font-size: 12px; }
+}
