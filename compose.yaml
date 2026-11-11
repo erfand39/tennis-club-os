@@ -66,6 +66,7 @@ services:
 
   app:
     image: sam-tennis-local-app
+    build: .
     env_file:
       - path: ./.local/push.env
         required: false
@@ -93,6 +94,7 @@ services:
 
   notifications:
     image: sam-tennis-local-app
+    build: .
     profiles: [push]
     restart: unless-stopped
     depends_on:
