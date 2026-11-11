@@ -71,5 +71,4 @@
   .report-trend .report-bar,.report-peaks meter { print-color-adjust:exact; }
   .report-print-note { display:block;font-size:.75rem; }
 }
-.report-date-fields { display:contents; }
 .report-detail button[data-action="csv"] { margin-top:.9rem; }

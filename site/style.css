@@ -1,0 +1,61 @@
+@font-face {
+  font-family: Vazirmatn;
+  src: url('./assets/vazirmatn-arabic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200F,U+FB50-FDFF,U+FE70-FEFF;
+}
+@font-face {
+  font-family: Vazirmatn;
+  src: url('./assets/vazirmatn-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF,U+2000-206F;
+}
+:root {
+  color-scheme: light;
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  background: #f7f8f3;
+  color: #202923;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+.release { min-block-size: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.release-content {
+  align-self: center;
+  inline-size: min(100%, 44rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 5rem);
+}
+.brand { display: flex; align-items: center; gap: .75rem; margin-block-end: clamp(1.6rem, 5vw, 3.5rem); }
+.brand strong, .brand span { display: block; }
+.brand span { color: #52635a; font-size: .65rem; letter-spacing: .09em; text-align: right; }
+h1 { color: #10382e; font-size: clamp(1.8rem, 4vw, 3.3rem); line-height: 1.35; margin: 0 0 .75rem; }
+p { color: #52635a; line-height: 1.85; margin: 0; }
+.setup { padding-inline-start: 1.5rem; margin-block: 1.5rem; line-height: 1.8; }
+.setup li + li { margin-block-start: .65rem; }
+.setup li::marker { color: #174c3c; font-weight: 800; }
+pre { margin: .5rem 0; padding: .75rem; border-radius: .6rem; background: #e9f0e6; color: #10382e; overflow-x: auto; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.actions a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding: .5rem .85rem;
+  border: 1px solid #c7d3c5;
+  border-radius: .65rem;
+  background: #fff;
+  color: #174c3c;
+  text-decoration: none;
+  font-weight: 750;
+}
+.actions .primary { border-color: #c7dd96; background: #d5eaa7; color: #10382e; }
+.actions a:hover { border-color: #7d9b77; }
+.actions a:focus-visible { outline: 3px solid #327250; outline-offset: 3px; }
+.release-photo {
+  background: #174c3c url('./assets/court-hero.webp') 29% center / cover no-repeat;
+}
+@media (max-width: 720px) {
+  .release { grid-template-columns: minmax(0, 1fr); min-block-size: auto; }
+  .release-photo { grid-row: 1; min-block-size: clamp(7rem, 26vw, 12rem); background-position: center 57%; }
+}

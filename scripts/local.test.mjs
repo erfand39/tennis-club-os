@@ -50,6 +50,25 @@ before(async () => {
 });
 after(async () => db.end());
 
+test('a fresh installation has no preloaded club or user records', async () => {
+  const landing = await get('/');
+  assert.equal(landing.status, 200);
+  const html = await landing.text();
+  assert.match(html, /راه‌اندازی باشگاه/);
+  assert.match(html, /ساخت حساب مالک/);
+  for (const table of [
+    'auth.users', 'public.organizations', 'public.locations', 'public.organization_members',
+    'public.courts', 'public.coach_profiles', 'public.student_profiles',
+    'public.bookings', 'public.sessions', 'public.invoices', 'public.payments', 'public.notification_events',
+  ]) {
+    const { rows: [{ count }] } = await db.query(`select count(*)::int from ${table}`);
+    assert.equal(count, 0, `Unexpected preloaded records in ${table}`);
+  }
+  for (const path of ['/access.html', '/manage.html', '/finance.html', '/operations.html', '/reports.html', '/notifications.html']) {
+    assert.equal((await get(path)).status, 404, path);
+  }
+});
+
 test('first owner setup, invalid codes, hostile origins and one-time initialization', async () => {
   assert.equal((await get('/api/health')).status, 200);
   assert.equal((await get('/club')).status, 307);

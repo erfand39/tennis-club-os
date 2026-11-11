@@ -13,11 +13,11 @@ const assets = {
 
 export async function pwaAsset(asset:string) {
   if (!Object.hasOwn(assets,asset)) return new Response(null,{status:404});
-  const data=await readFile(join(process.cwd(),'prototype','pwa',asset));
+  const data=await readFile(join(process.cwd(),'local','pwa',asset));
   return new Response(Uint8Array.from(data),{headers:{'Content-Type':assets[asset as keyof typeof assets]}});
 }
 
 export async function pwaWorker() {
-  const data=await readFile(join(process.cwd(),'prototype','sw.js'));
+  const data=await readFile(join(process.cwd(),'local','pwa','sw.js'));
   return new Response(Uint8Array.from(data),{headers:{'Content-Type':'text/javascript; charset=utf-8','Service-Worker-Allowed':'/'}});
 }

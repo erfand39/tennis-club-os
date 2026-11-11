@@ -147,7 +147,7 @@ before(async () => {
       throw new Error(`${file}: ${error.message}`, { cause: error });
     }
   }
-  await db.query(await readFile(new URL('../supabase/seeds/club_dev.sql', import.meta.url), 'utf8'));
+  await db.query(await readFile(new URL('./fixtures/club.sql', import.meta.url), 'utf8'));
   await db.query("insert into public.organizations (id, name) values ($1, 'باشگاه دوم')", [otherOrg]);
   await db.query("insert into public.locations (id, organization_id, name) values ($1,$2,'شعبهٔ بیرونی')", [otherLocation, otherOrg]);
   await db.query("insert into public.courts (id, organization_id, location_id, name, surface) values ($1,$2,$3,'زمین دیگر','خاک رس')",

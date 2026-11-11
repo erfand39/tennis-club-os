@@ -7,7 +7,7 @@ import {parsePushSubscription} from '../local/push-config.mjs';
 import {dispatchPush} from '../local/push.mjs';
 import {localOrigin} from '../src/lib/local-origin.ts';
 
-const worker=await readFile(new URL('../prototype/sw.js',import.meta.url),'utf8');
+const worker=await readFile(new URL('../local/pwa/sw.js',import.meta.url),'utf8');
 function harness() {
   const events=new Map(),cached=[],deleted=[],system=[];
   let claimed=false,skipped=false,fetches=0;

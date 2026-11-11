@@ -49,11 +49,3 @@
   .notice-filter .field,.notice-actions>* { flex:1 1 auto; }
   .notice-actions form button { width:100%; }
 }
-
-.demo-actions { display:flex;flex-wrap:wrap;gap:.4rem; }
-@media (max-width:630px) {
-  .demo-actions .button { min-height:44px; }
-}
-@media (max-width:520px) {
-  .page-heading:has(.demo-actions) { align-items:stretch; }
-}

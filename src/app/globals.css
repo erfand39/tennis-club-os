@@ -1,4 +1,4 @@
-@import "../../prototype/styles.css";
-@import "../../prototype/local.css";
-@import "../../prototype/reports.css";
-@import "../../prototype/pwa.css";
+@import "./styles/base.css";
+@import "./styles/club.css";
+@import "./styles/reports.css";
+@import "./styles/pwa.css";

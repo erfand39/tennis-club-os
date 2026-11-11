@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#174c3c">
+    <meta name="description" content="راهنمای راه‌اندازی سامانهٔ محلی باشگاه تنیس سام">
+    <title>باشگاه تنیس سام</title>
+    <link rel="icon" href="./assets/court-icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./style.css">
+    <script src="./retire-demo.js" defer></script>
+  </head>
+  <body>
+    <main class="release">
+      <div class="release-content">
+        <header class="brand">
+          <img src="./assets/court-icon.svg" width="48" height="48" alt="">
+          <div><strong>باشگاه تنیس سام</strong><span lang="en" dir="ltr">SAM TENNIS CLUB</span></div>
+        </header>
+        <section aria-labelledby="release-title">
+          <h1 id="release-title">راه‌اندازی پنل باشگاه</h1>
+          <p>پنل مدیریت و پایگاه داده روی رایانهٔ باشگاه اجرا می‌شوند. پس از نصب، حساب مالک را در همان رایانه بسازید.</p>
+          <ol class="setup">
+            <li>Docker Desktop را باز کنید.</li>
+            <li>در پوشهٔ پروژه این دو دستور را اجرا کنید.
+              <pre dir="ltr"><code>./scripts/local.sh up
+./scripts/local.sh setup-code</code></pre>
+            </li>
+            <li>پنل محلی را باز کنید و با کد نصب، حساب مالک را بسازید.</li>
+          </ol>
+          <div class="actions">
+            <a class="primary" href="http://127.0.0.1:3030/">باز کردن پنل محلی</a>
+            <a href="https://github.com/erfand39/tennis-club-os/blob/main/docs/local-run.md">راهنمای نصب در GitHub</a>
+          </div>
+        </section>
+      </div>
+      <div class="release-photo" aria-hidden="true"></div>
+    </main>
+  </body>
+</html>
