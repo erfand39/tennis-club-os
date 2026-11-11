@@ -12,6 +12,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./local/init-db.sh:/docker-entrypoint-initdb.d/10-sam.sh:ro
       - ./local/init-db.sql:/opt/sam/init-db.sql:ro
+      - ./local/init-roles.sql:/opt/sam/init-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
       interval: 5s
@@ -59,6 +60,7 @@ services:
         condition: service_healthy
     command: ["node", "scripts/migrate-local.mjs"]
     environment:
+      SAM_DATA_VOLUME: ${SAM_DATA_VOLUME:-sam-tennis-pgdata-v1}
       DATABASE_URL: postgres://postgres:${SAM_DB_PASSWORD}@db:5432/postgres
     networks: [backend]
 
@@ -110,4 +112,4 @@ networks:
 
 volumes:
   pgdata:
-    name: sam-tennis-pgdata-v1
+    name: ${SAM_DATA_VOLUME:-sam-tennis-pgdata-v1}

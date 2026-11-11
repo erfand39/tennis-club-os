@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { randomUUID,timingSafeEqual } from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { appOrigin, authUrl, setupCode } from '@/lib/config';
 import { asUser, database, hasManagerAccess, isConfigured } from '@/lib/db';
@@ -285,6 +285,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       : dbError.code === '23514' || dbError.code?.startsWith('22') ? 'resource-invalid'
       : dbError.code === '40001' || dbError.code === '40P01' ? 'retry' : 'unavailable';
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
-    return wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
+    const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
+    if (code==='unavailable') {
+      const trace=randomUUID();
+      console.error(JSON.stringify({event:'local_api_unavailable',trace}));
+      response.headers.set('X-Sam-Trace',trace);
+    }
+    return response;
   }
 }

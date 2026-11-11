@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+caller=$PWD
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 settings="$root/.local/secrets.env"
@@ -56,6 +57,40 @@ fi
 
 [ -f "$settings" ] || { printf '%s\n' 'Run ./scripts/local.sh up first.' >&2; exit 1; }
 
+selected_volume=$(sed -n 's/^SAM_DATA_VOLUME=//p' "$settings")
+if [ -n "$selected_volume" ]; then
+  case "$selected_volume" in
+    *[!a-z0-9-]|sam-tennis-restored-) printf '%s\n' 'Invalid SAM_DATA_VOLUME.' >&2; exit 1 ;;
+    sam-tennis-restored-*) ;;
+    *) printf '%s\n' 'Invalid SAM_DATA_VOLUME.' >&2; exit 1 ;;
+  esac
+  case "${1:-up}" in
+    restore-check|restore-stage) ;;
+    *)
+      if ! docker volume inspect "$selected_volume" >/dev/null 2>&1; then
+        printf '%s\n' 'The selected recovery volume does not exist.' >&2
+        exit 1
+      fi
+      ;;
+  esac
+fi
+# An inherited shell variable must not switch the installation to a different database.
+unset SAM_DATA_VOLUME
+
+restore_archive() {
+  mode=$1
+  archive=$2
+  shift 2
+  [ -f "$archive" ] && [ -s "$archive" ] || { printf '%s\n' 'Select a readable, non-empty club backup.' >&2; return 1; }
+  SAM_DB_PASSWORD=$(sed -n 's/^SAM_DB_PASSWORD=//p' "$settings")
+  SAM_AUTH_DB_PASSWORD=$(sed -n 's/^SAM_AUTH_DB_PASSWORD=//p' "$settings")
+  SAM_WEB_DB_PASSWORD=$(sed -n 's/^SAM_WEB_DB_PASSWORD=//p' "$settings")
+  export SAM_DB_PASSWORD SAM_AUTH_DB_PASSWORD SAM_WEB_DB_PASSWORD
+  docker run --rm --interactive --pull=never --network none --entrypoint sh \
+    -e SAM_DB_PASSWORD -e SAM_AUTH_DB_PASSWORD -e SAM_WEB_DB_PASSWORD \
+    --volume "$root/local:/opt/sam:ro" "$@" postgres:17.11-bookworm /opt/sam/restore-archive.sh "$mode" < "$archive"
+}
+
 case "${1:-up}" in
   up)
     compose up -d --build --wait --wait-timeout 240
@@ -88,6 +123,26 @@ case "${1:-up}" in
     [ "$#" -eq 2 ] || { printf '%s\n' 'Usage: ./scripts/local.sh recover OWNER_EMAIL' >&2; exit 2; }
     compose exec -T app node scripts/owner-recovery.mjs "$2"
     ;;
+  restore-check|restore-stage)
+    [ "$#" -eq 2 ] || { printf '%s\n' 'Usage: ./scripts/local.sh restore-check|restore-stage BACKUP' >&2; exit 2; }
+    case "$2" in /*) archive=$2 ;; *) archive="$caller/$2" ;; esac
+    if [ "$1" = restore-check ]; then
+      restore_archive check "$archive"
+    else
+      volume="sam-tennis-restored-$(date -u '+%Y%m%d%H%M%S')-$(openssl rand -hex 8)"
+      if docker volume inspect "$volume" >/dev/null 2>&1; then
+        printf '%s\n' 'The recovery volume name already exists.' >&2
+        exit 1
+      fi
+      docker volume create --label sam.tennis.recovery=true "$volume" >/dev/null
+      if restore_archive stage "$archive" --mount "type=volume,source=$volume,target=/var/lib/postgresql/data"; then
+        printf 'SAM_DATA_VOLUME=%s\n' "$volume"
+      else
+        docker volume rm "$volume" >/dev/null || true
+        exit 1
+      fi
+    fi
+    ;;
   backup)
     mkdir -p .local/backups
     temp=$(mktemp "$root/.local/backups/.backup.XXXXXX")
@@ -99,5 +154,5 @@ case "${1:-up}" in
     trap - EXIT HUP INT TERM
     printf '%s\n' "$final"
     ;;
-  *) printf '%s\n' 'Usage: ./scripts/local.sh {up|start|status|stop|logs|setup-code|recover|backup|push-setup}' >&2; exit 2;;
+  *) printf '%s\n' 'Usage: ./scripts/local.sh {up|start|status|stop|logs|setup-code|recover|backup|restore-check|restore-stage|push-setup}' >&2; exit 2;;
 esac

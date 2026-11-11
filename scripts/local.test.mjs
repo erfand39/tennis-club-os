@@ -11,7 +11,7 @@ for (const url of [origin, databaseUrl]) {
 }
 assert.equal(new URL(databaseUrl).search, '', 'The test database URL must use the stated host and port.');
 const db = new pg.Client({ connectionString: databaseUrl });
-const password = `Test-${randomBytes(16).toString('hex')}`;
+const password = process.env.SAM_TEST_OWNER_PASSWORD ?? `Test-${randomBytes(16).toString('hex')}`;
 const ownerEmail = 'owner@sam.example';
 const roles = ['admin'];
 const identities = new Map();
@@ -875,6 +875,18 @@ test('installable shell is public while private pages and API responses stay no-
   assert.match(await (await get('/pwa/offline.html')).text(),/اتصال به سامانه برقرار نیست/);
   assert.equal((await get('/pwa/reports.json')).status,404);
   assert.match((await get(`/club/${org}/notifications`,owner)).headers.get('cache-control'),/no-store/);
+  for (const path of ['/.local/secrets.env','/.local/backups/club.dump','/local/restore-verify.sql']) {
+    const response=await get(path,owner);
+    assert.equal(response.status,404,path);
+    await response.body?.cancel();
+  }
+  const unsupportedBody=new FormData();
+  unsupportedBody.set('attachment',new Blob(['synthetic fixture']),'fixture.txt');
+  const unsupported=await fetch(origin+'/api/resource',{
+    method:'POST',headers:{Origin:origin,Accept:'application/json',Cookie:owner},body:unsupportedBody,
+  });
+  assert.equal(unsupported.status,400);
+  assert.equal((await unsupported.json()).error,'invalid');
 });
 
 test('manager notifications respect branch scope, transactional reminders, read state and push leases',async ()=>{
@@ -964,6 +976,107 @@ test('manager notifications respect branch scope, transactional reminders, read 
     values ($1,$2,$3,$4,$5) returning id`,[org,manager.id,endpoint,keys.p256dh,keys.auth]);
   assert.equal((await post('logout',{},managerCookie+'; sam_push_device='+reenabled.id)).status,303);
   assert.equal(await one('select id from tennis_runtime.push_devices where id=$1',[reenabled.id]),undefined);
+});
+
+test('release workflow reconciles one class from resources and booking to attendance, settlement and reports', async t => {
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const shift=(day,offset)=>new Date(Date.parse(day+'T00:00Z')+offset*86400000).toISOString().slice(0,10);
+  const future=shift(today,2),past=shift(future,-14);
+  const weekday=String(new Date(future+'T00:00Z').getUTCDay()||7);
+  const one=async (sql,args)=>(await db.query(sql,args)).rows[0];
+  const command=async (name,fields)=>{
+    const result=await post(name,{org,branch,request:randomUUID(),...fields},owner);
+    const body=await result.json();
+    assert.equal(result.status,200,name+' '+JSON.stringify(body));
+    return body;
+  };
+  const target=({next})=>next.split('?')[0].split('/').at(-1);
+  const create=(kind,fields)=>command('resource',{kind,status:'active',location:branch,...fields});
+  const court=target(await create('courts',{name:'زمین آزمون انتشار',surface:'هاردکورت',capacity:'۴'}));
+  await create('courts',{name:'زمین پشتیبان آزمون انتشار',surface:'خاک رس',capacity:'۴'});
+  const coach=target(await create('coaches',{name:'مربی آزمون انتشار',pay_basis:'hourly',pay_amount_minor:'۴۰۰۰۰۰',court_id:court}));
+  const student=target(await create('students',{name:'شاگرد آزمون انتشار',skill_level:'متوسط'}));
+  const otherStudent=target(await create('students',{name:'شاگرد دوم آزمون انتشار'}));
+  const hours={location:branch,weekday,from:future,start:'08:00',end:'22:00'};
+  await command('resource-hours',{...hours,kind:'courts',id:court});
+  await command('resource-hours',{...hours,kind:'coaches',id:coach});
+  await command('resource-rate',{kind:'courts',id:court,location:branch,booking_kind:'group',from:future,unit_minutes:'60',amount_minor:'1200000'});
+  assert.deepEqual(await one(`select c.name,c.status,p.amount_minor from public.courts c
+    join public.pricing_rules p on p.court_id=c.id where c.id=$1`,[court]),{name:'زمین آزمون انتشار',status:'active',amount_minor:'1200000'});
+  assert.equal((await one('select count(*)::int as n from public.coach_availability where coach_id=$1',[coach])).n,1);
+
+  const bookingFields={court,coach,capacity:'۲',kind:'group',start:future+'T10:00',minutes:'۶۰'};
+  const quote=await command('booking-quote',bookingFields);
+  assert.deepEqual(quote.price,{amount:'1200000',currency:'IRR'});
+  const booking=target(await command('booking-create',{...bookingFields,...quote.price}));
+  const {id:session}=await one('select id from public.sessions where booking_id=$1',[booking]);
+  await command('class-enroll',{session,student});
+  await command('class-enroll',{session,student:otherStudent});
+  const {rows:roster}=await db.query('select id,student_id from public.session_participants where session_id=$1',[session]);
+  assert.equal(roster.length,2);
+  const marks=Object.fromEntries(roster.map(row=>['attendance.'+row.id,row.student_id===student?'present':'absent']));
+  const futureAttendance=await post('class-attendance',{org,branch,session,request:randomUUID(),start:future+'T10:00',
+    end:future+'T11:00',revision:'2',booking_revision:'0',...marks},owner);
+  assert.equal(futureAttendance.status,400);
+  assert.equal((await futureAttendance.json()).error,'attendance-time');
+
+  // Advance the disposable booking and all allocations by two weeks without waiting for real time.
+  await db.query('begin');
+  try {
+    for (const [table,key,value] of [
+      ['public.bookings','id',booking],['tennis_private.court_allocations','booking_id',booking],
+      ['tennis_private.coach_allocations','session_id',session],
+    ]) await db.query(`update ${table} set slot=tstzrange(lower(slot)-interval '14 days',upper(slot)-interval '14 days','[)') where ${key}=$1`,[value]);
+    await db.query(`update tennis_private.student_allocations
+      set slot=tstzrange(lower(slot)-interval '14 days',upper(slot)-interval '14 days','[)')
+      where participant_id=any($1::uuid[])`,[roster.map(row=>row.id)]);
+    await db.query('commit');
+  } catch (error) {
+    await db.query('rollback');
+    throw error;
+  }
+  const current=await one(`select b.revision as booking_revision,s.revision from public.sessions s
+    join public.bookings b on b.id=s.booking_id where s.id=$1`,[session]);
+  await command('class-attendance',{session,start:past+'T10:00',end:past+'T11:00',...current,...marks});
+  const {rows:marksInDb}=await db.query(`select a.status from public.attendance_records a
+    join public.session_participants p on p.id=a.participant_id where p.session_id=$1 order by a.status::text`,[session]);
+  assert.deepEqual(marksInDb,[{status:'absent'},{status:'present'}]);
+
+  const invoice=target(await command('finance-issue',{booking}));
+  const paymentFields={invoice,amount:'1200000',method:'cash',reference:'آزمون انتشار',request:randomUUID()};
+  await command('finance-payment',paymentFields);
+  await command('finance-payment',paymentFields);
+  const receipt=await one('select id from public.payments where invoice_id=$1',[invoice]);
+  await command('finance-refund',{invoice,payment:receipt.id,amount:'300000',reason:'اصلاح آزمون انتشار'});
+  assert.deepEqual(await one('select due_minor,received_minor,status from public.invoice_balances where invoice_id=$1',[invoice]),
+    {due_minor:'300000',received_minor:'900000',status:'partial'});
+  assert.equal((await one('select count(*)::int as n from public.payments where invoice_id=$1',[invoice])).n,1);
+  const payable=await one('select id from public.coach_payables where session_id=$1',[session]);
+  await command('finance-coach-approve',{target:payable.id,amount:'400000'});
+  await command('finance-coach-pay',{target:payable.id,amount:'400000',method:'transfer'});
+  assert.deepEqual(await one('select status,amount_minor from public.coach_payables where id=$1',[payable.id]),
+    {status:'paid',amount_minor:'400000'});
+
+  const query=new URLSearchParams({branch,period:'custom',from:past,to:today});
+  const reports=`/club/${org}/reports`;
+  const samples=[
+    [`${reports}?${query}&scope=court&entity=${court}&detail=money`,['۹۰۰٬۰۰۰ ریال','۳۰۰٬۰۰۰ ریال','/finance/'+invoice]],
+    [`${reports}?${query}&scope=coach&entity=${coach}&detail=attendance`,['۴۰۰٬۰۰۰ ریال','۵۰٪','/classes/'+session]],
+    [`${reports}?${query}&scope=student&entity=${student}&detail=attendance`,['۱۰۰٪','شاگرد آزمون انتشار']],
+    [`${reports}?${query}&detail=money`,['/finance/'+invoice,'ریز گردش و ماندهٔ مالی']],
+  ];
+  const latencies=await Promise.all([...samples,...samples].map(async ([path,terms])=>{
+    const start=performance.now();
+    const response=await get(path,owner);
+    assert.equal(response.status,200);
+    const html=(await response.text()).replaceAll('<!-- -->','');
+    for (const term of terms) assert.ok(html.includes(term),term);
+    return performance.now()-start;
+  }));
+  t.diagnostic(`8 concurrent report requests, client elapsed ${Math.round(Math.min(...latencies))}–${Math.round(Math.max(...latencies))} ms`);
+  const xlsx=await get(`${reports}/excel?${query}&scope=court&entity=${court}`,owner);
+  assert.match(xlsx.headers.get('content-type'),/spreadsheetml/);
+  assert.equal(Buffer.from(await xlsx.arrayBuffer()).readUInt32LE(0),0x04034b50);
 });
 
 test('leaving preserves the audit trail and removes club access', async () => {
