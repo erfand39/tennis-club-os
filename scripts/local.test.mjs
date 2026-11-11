@@ -23,8 +23,9 @@ let secondBranch;
 function get(path, cookie) {
   return fetch(new URL(path, origin), { redirect: 'manual', headers: cookie ? { Cookie: cookie } : {} });
 }
-function post(action, fields, cookie, suppliedOrigin = origin) {
+function post(action, fields, cookie, suppliedOrigin = origin, fetchSite) {
   const headers = { Origin: suppliedOrigin, Accept: 'application/json' };
+  if (fetchSite) headers['Sec-Fetch-Site'] = fetchSite;
   if (cookie) headers.Cookie = cookie;
   return fetch(new URL(`/api/${action}`, origin), {
     method: 'POST', redirect: 'manual', headers, body: new URLSearchParams(fields),
@@ -75,6 +76,12 @@ test('first owner setup, invalid codes, hostile origins and one-time initializat
   const values = { email: ownerEmail, password, code, name: 'مالک آزمایشی', timezone: 'Asia/Tehran' };
   assert.equal((await post('setup', values, undefined, 'http://example.test')).status, 403);
   assert.equal((await post('setup', { ...values, code: 'invalid' })).status, 403);
+  const opaqueCrossSite = await post('setup', { ...values, code: 'invalid' }, undefined, 'null', 'cross-site');
+  assert.equal(opaqueCrossSite.status, 403);
+  assert.deepEqual(await opaqueCrossSite.json(), { error: 'origin' });
+  const safariOpaque = await post('setup', { ...values, code: 'invalid' }, undefined, 'null', 'same-origin');
+  assert.equal(safariOpaque.status, 403);
+  assert.deepEqual(await safariOpaque.json(), { error: 'setup-code' });
   const created = await post('setup', values);
   assert.equal(created.status, 303, created.status === 303 ? '' : await created.text());
   owner = sessionCookie(created);
