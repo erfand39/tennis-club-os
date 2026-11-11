@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
 import { calendarPath,numberFa } from '@/lib/calendar-dates';
+import { operationsPath } from '@/lib/club-finance-fields';
 import { branches,uuid } from '@/lib/club';
 import { financeInvoice } from '@/lib/finance';
 import { financePath,paymentMethods } from '@/lib/finance-fields';
@@ -45,8 +46,9 @@ export default async function InvoicePage({params,searchParams}:{
         <section className="panel local-panel">
           <h2>ردیف‌های فاکتور</h2>
           <ul className="resource-timeline">{items.map(item=><li key={item.id}>
-            <span><Link className="panel-link" href={calendarPath(org,{booking:item.booking_id})}>{bookingKinds[item.kind]} · {item.court}</Link>
-              <small>{localTime(item.starts_at)}{item.name ? ' · '+item.name : ''}</small>
+            <span>{item.booking_id && item.kind ? <Link className="panel-link" href={calendarPath(org,{booking:item.booking_id})}>{bookingKinds[item.kind]} · {item.court}</Link>
+              : item.package_id && <Link className="panel-link" href={operationsPath(org,branch.id,'packages',{package:item.package_id})}>{item.package_title ?? 'بستهٔ آموزشی'}</Link>}
+              <small>{item.starts_at ? localTime(item.starts_at) : ''}{item.name ? (item.starts_at?' · ':'')+item.name : ''}</small>
               {item.status==='cancelled' && <small>سانس لغوشده</small>}</span>
             <strong>{amount(item.amount)}</strong>
           </li>)}</ul>

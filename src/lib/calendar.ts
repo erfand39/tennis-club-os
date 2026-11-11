@@ -110,7 +110,7 @@ export function calendarBookingOptions(user: string, org: string, branch: string
 }
 
 type BookingDetail = Booking & {
-  revision: string; active_invoice_id: string|null; amount: string|null; currency: string|null; cancellation_reason: string|null; cancelled_at: Date|null;
+  revision: string; active_invoice_id: string|null; covered_by_training: boolean; amount: string|null; currency: string|null; cancellation_reason: string|null; cancelled_at: Date|null;
 };
 type History = { action: string; created_at: Date; old_start: Date|null; new_start: Date|null };
 export function calendarBooking(user: string, org: string, branches: Branch[], id: string) {
@@ -120,7 +120,9 @@ export function calendarBooking(user: string, org: string, branches: Branch[], i
     const branch = branches.find(item => item.id === location);
     if (!branch) return null;
     const detail = (await db.query<BookingDetail>(`
-      select ${bookingColumns},b.revision,b.cancellation_reason,b.cancelled_at,p.amount_minor as amount,p.currency,i.invoice_id as active_invoice_id
+      select ${bookingColumns},b.revision,b.cancellation_reason,b.cancelled_at,p.amount_minor as amount,p.currency,i.invoice_id as active_invoice_id,
+        (b.kind='private' and exists(select from public.session_participants pp join public.training_uses u on u.participant_id=pp.id
+          where pp.session_id=s.id and u.reversed_at is null)) as covered_by_training
       ${bookingTables}
       left join public.booking_prices p on (p.organization_id,p.location_id,p.booking_id)=(b.organization_id,b.location_id,b.id)
       left join public.invoice_items i on (i.organization_id,i.location_id,i.booking_id)=(b.organization_id,b.location_id,b.id) and i.active

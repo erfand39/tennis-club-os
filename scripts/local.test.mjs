@@ -499,6 +499,175 @@ test('finance issues and reconciles invoices with exact units and durable comman
   assert.equal((await endpoint('payment',{...payment,request:randomUUID()},manager,secondBranch)).status,403);
 });
 
+test('training credit, expenses, coach settlement and special rates reconcile against their source records', async () => {
+  const command=(name,values={},location=branch)=>post('finance-'+name,{org,branch:location,request:randomUUID(),...values},owner);
+  const ok=async response=>{
+    const body=await response.json();
+    assert.equal(response.status,200,JSON.stringify(body));
+    return body;
+  };
+  const error=async (response,code,status=409)=>{
+    assert.equal(response.status,status,response.status===status?'':await response.text());
+    assert.equal((await response.json()).error,code);
+  };
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const {rows:[attended]}=await db.query(`
+    select p.id,p.student_id,p.session_id,s.revision,b.revision as booking_revision,s.coach_id,b.court_id,
+      timezone(b.timezone,lower(s.actual_slot))::date::text as day
+    from public.session_participants p join public.attendance_records a on a.participant_id=p.id
+    join public.sessions s on s.id=p.session_id join public.bookings b on b.id=s.booking_id
+    where p.organization_id=$1 and p.location_id=$2 and a.status='late' and s.status='completed' order by p.id limit 1
+  `,[org,branch]);
+  assert(attended);
+  const issueKey=randomUUID();
+  const packageLink=await ok(await command('training-issue',{
+    student:attended.student_id,title:'بستهٔ یک‌جلسه‌ای آزمون',sessions:'۱',from:attended.day,until:today,amount:'۱۲۳۴',unit:'toman',request:issueKey,
+  }));
+  assert.deepEqual(await ok(await command('operation',{command:'finance-training-issue',request:issueKey})),packageLink);
+  const packageId=new URL(packageLink.next,origin).searchParams.get('package');
+  const {rows:[invoice]}=await db.query('select invoice_id,amount_minor from public.invoice_items where package_id=$1',[packageId]);
+  assert.equal(invoice.amount_minor,'12340');
+  assert.match(await (await get(`/club/${org}/finance/${invoice.invoice_id}`,owner)).text(),/بستهٔ یک‌جلسه‌ای آزمون/);
+  await error(await command('void',{invoice:invoice.invoice_id,reason:'تست'}),'training-cancel-first');
+
+  const credit={target:packageId,participant:attended.id,request:randomUUID()};
+  const consumption=await ok(await command('training-redeem',credit));
+  assert.deepEqual(await ok(await command('training-redeem',credit)),consumption);
+  await error(await command('training-redeem',{...credit,request:randomUUID()}),'training-duplicate');
+  await error(await command('training-status',{target:packageId,status:'cancelled',reason:'تست'}),'training-used');
+  const {rows:roster}=await db.query(`select p.id,a.status from public.session_participants p
+    join public.attendance_records a on a.participant_id=p.id where p.session_id=$1`,[attended.session_id]);
+  const marks=Object.fromEntries(roster.map(item=>['attendance.'+item.id,item.id===attended.id?'absent':item.status]));
+  const correction=await post('class-attendance',{org,branch,session:attended.session_id,request:randomUUID(),
+    revision:attended.revision,booking_revision:attended.booking_revision,start:attended.day+'T10:00',end:attended.day+'T11:00',reason:'اصلاح حضور و برگشت اعتبار',...marks},owner);
+  assert.equal(correction.status,200,await correction.text());
+  const {rows:[used]}=await db.query('select reversed_at,reversal_reason from public.training_uses where package_id=$1',[packageId]);
+  assert(used.reversed_at);
+  assert.equal(used.reversal_reason,'اصلاح وضعیت حضور');
+  await error(await command('training-redeem',{...credit,request:randomUUID()}),'training-ineligible');
+  await ok(await command('training-status',{target:packageId,status:'cancelled',reason:'اتمام آزمون'}));
+  await ok(await command('void',{invoice:invoice.invoice_id,reason:'ابطال فاکتور بسته'}));
+  assert.match(await (await get(packageLink.next,owner)).text(),/اعتبار برگشت/);
+  const member=await ok(await command('training-issue',{student:attended.student_id,title:'عضویت زمانی',from:attended.day,until:today}));
+  assert.match(await (await get(member.next,owner)).text(),/بدون سقف جلسه/);
+  await error(await command('training-issue',{student:attended.student_id,title:'خارج از شعبه',from:today,until:today},secondBranch),'booking-student-unavailable',400);
+
+  const expenseKey=randomUUID();
+  const expenseLink=await ok(await command('expense-record',{title:'تجهیزات آزمون',category:'equipment',method:'card',day:today,amount:'۹٬۰۰۰',unit:'toman',request:expenseKey}));
+  assert.deepEqual(await ok(await command('operation',{command:'finance-expense-record',request:expenseKey})),expenseLink);
+  const {rows:[expense]}=await db.query("select id,amount_minor from public.club_expenses where title='تجهیزات آزمون'");
+  assert.equal(expense.amount_minor,'90000');
+  assert.match(await (await get(expenseLink.next,owner)).text(),/تجهیزات آزمون/);
+
+  const {rows:[existingPayable]}=await db.query('select id,status from public.coach_payables where session_id=$1',[attended.session_id]);
+  assert.equal(existingPayable.status,'pending');
+  await ok(await command('coach-adjust',{target:existingPayable.id,amount:'۲۰٬۰۰۰',unit:'toman',reason:'توافق ثبت‌شده'}));
+  await error(await command('coach-approve',{target:existingPayable.id,amount:'199999'}),'coach-estimate-changed');
+  const approved=await ok(await command('coach-approve',{target:existingPayable.id,amount:'200000'}));
+  assert.match(await (await get(approved.next,owner)).text(),/تأییدشده/);
+  const payKey=randomUUID();
+  const payment={target:existingPayable.id,amount:'200000',method:'transfer',reference:'آزمون',request:payKey};
+  await ok(await command('coach-pay',payment));
+  await ok(await command('coach-pay',payment));
+  await ok(await command('coach-correct',{target:existingPayable.id,amount:'175000',expected:'200000',reason:'اصلاح ثبت دستمزد'}));
+  await error(await command('coach-correct',{target:existingPayable.id,amount:'165000',expected:'200000',reason:'اصلاح قدیمی'}),'coach-estimate-changed');
+  const {rows:[payable]}=await db.query(`select p.status,p.amount_minor,a.delta_minor from public.coach_payables p
+    join public.coach_payment_adjustments a on a.payable_id=p.id where p.id=$1`,[existingPayable.id]);
+  assert.deepEqual(payable,{status:'paid',amount_minor:'200000',delta_minor:'-25000'});
+
+  const day=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
+  const weekday=new Date(day+'T00:00Z').getUTCDay()||7;
+  const {rows:[rate]}=await db.query(`select r.id,r.court_id from public.pricing_rules r join public.courts c on c.id=r.court_id
+    where r.organization_id=$1 and r.location_id=$2 and r.kind='rental' and c.name='زمین زمان‌بندی دو'`,[org,branch]);
+  const special={target:rate.id,weekday:String(weekday),start:'۱۹:۰۰',end:'۲۱:۰۰',minimum:'60',maximum:'60',amount:'۱۸۰٬۰۰۰',unit:'toman'};
+  await ok(await command('rate-special',special));
+  await error(await command('rate-special',special),'rate-special-conflict');
+  const draft={org,branch,court:rate.court_id,start:day+'T19:00',minutes:'60',kind:'rental',booker:'آزمون تعرفهٔ ویژه',request:randomUUID()};
+  const quote=await ok(await post('booking-quote',draft,owner));
+  assert.deepEqual(quote.price,{amount:'1800000',currency:'IRR'});
+  const longer=await ok(await post('booking-quote',{...draft,minutes:'120'},owner));
+  assert.equal(longer.price.amount,'3000000');
+  const booking=await ok(await post('booking-create',{...draft,...quote.price},owner));
+  const bookingId=booking.next.split('?')[0].split('/').at(-1);
+  const {rows:[rule]}=await db.query('select id from public.pricing_specials where rate_id=$1',[rate.id]);
+  await ok(await command('rate-retire',{target:rule.id,reason:'پایان نرخ آزمایشی'}));
+  assert.equal((await ok(await post('booking-quote',draft,owner))).price.amount,'1500000');
+  assert.equal((await db.query('select amount_minor from public.booking_prices where booking_id=$1',[bookingId])).rows[0].amount_minor,'1800000');
+
+  const finance=await get(`/club/${org}/finance?branch=${branch}&from=${today}&to=${today}`,owner);
+  assert.equal(finance.status,200);
+  const summary=(await finance.text()).replaceAll('<!-- -->','');
+  assert.match(summary,/۹۰٬۰۰۰ ریال/);
+  assert.match(summary,/۱۷۵٬۰۰۰ ریال/);
+  await ok(await command('expense-void',{target:expense.id,reason:'اصلاح هزینه'}));
+  assert.match(await (await get(expenseLink.next,owner)).text(),/اصلاح هزینه/);
+});
+
+test('coach revenue share snapshots terms and private credits exclude duplicate billing', async () => {
+  const cmd=(name,values)=>post('finance-'+name,{org,branch,request:randomUUID(),...values},owner);
+  const ok=async response=>{
+    const data=await response.json();
+    assert.equal(response.status,200,JSON.stringify(data));
+    return data;
+  };
+  const {rows:[member]}=await db.query(`select id,student_id,valid_from::text as day from public.training_packages
+    where organization_id=$1 and location_id=$2 and title='عضویت زمانی'`,[org,branch]);
+  const {rows:[source]}=await db.query(`
+    select b.court_id,b.created_by,s.coach_id,p.pricing_rule_id,p.unit_minutes,p.unit_amount_minor
+    from public.bookings b join public.sessions s on s.booking_id=b.id join public.booking_prices p on p.booking_id=b.id
+    where b.organization_id=$1 and b.location_id=$2 and b.kind='private' order by b.starts_at limit 1
+  `,[org,branch]);
+  await db.query("update public.coach_profiles set pay_basis='revenue_share',pay_amount_minor=25 where id=$1",[source.coach_id]);
+  const {rows:[booking]}=await db.query(`
+    insert into public.bookings (organization_id,location_id,court_id,slot,timezone,kind,created_by)
+    values ($1,$2,$3,tstzrange($4::timestamp at time zone 'Asia/Tehran',$5::timestamp at time zone 'Asia/Tehran','[)'),
+      'Asia/Tehran','private',$6) returning id`,[org,branch,source.court_id,member.day+'T12:00',member.day+'T13:00',source.created_by]);
+  await db.query(`
+    insert into public.booking_prices(booking_id,organization_id,location_id,court_id,kind,pricing_rule_id,currency,unit_minutes,
+      booked_minutes,unit_amount_minor,amount_minor)
+    values ($1,$2,$3,$4,'private',$5,'IRR',$6,$6,$7,$7)
+  `,[booking.id,org,branch,source.court_id,source.pricing_rule_id,source.unit_minutes,source.unit_amount_minor]);
+  const {rows:[session]}=await db.query(`
+    insert into public.sessions(organization_id,location_id,booking_id,coach_id,capacity)
+    values ($1,$2,$3,$4,1) returning id,pay_rate_snapshot`,[org,branch,booking.id,source.coach_id]);
+  assert.equal(session.pay_rate_snapshot,'25');
+  await db.query('update public.coach_profiles set pay_amount_minor=75 where id=$1',[source.coach_id]);
+  const {rows:[participant]}=await db.query(`insert into public.session_participants(organization_id,location_id,session_id,student_id)
+    values ($1,$2,$3,$4) returning id`,[org,branch,session.id,member.student_id]);
+  assert.equal((await post('class-attendance',{org,branch,session:session.id,request:randomUUID(),revision:'0',booking_revision:'0',
+    start:member.day+'T12:00',end:member.day+'T13:00',['attendance.'+participant.id]:'present'},owner)).status,200);
+  const issued=await ok(await cmd('issue',{booking:booking.id}));
+  const invoice=issued.next.split('?')[0].split('/').at(-1);
+  await ok(await cmd('payment',{invoice,method:'cash',amount:'300000'}));
+  const {rows:[payable]}=await db.query('select id,status from public.coach_payables where session_id=$1',[session.id]);
+  assert.equal(payable.status,'ready');
+  await ok(await cmd('coach-approve',{target:payable.id,amount:'75000'}));
+  const {rows:[receipt]}=await db.query('select id from public.payments where invoice_id=$1',[invoice]);
+  await ok(await cmd('refund',{invoice,payment:receipt.id,amount:'100000',reason:'بازپرداخت آزمون درصد'}));
+  assert.deepEqual((await db.query('select basis_minor,amount_minor from public.coach_payables where id=$1',[payable.id])).rows[0],
+    {basis_minor:'300000',amount_minor:'75000'});
+  const redemption={target:member.id,participant:participant.id};
+  const blocked=await cmd('training-redeem',redemption);
+  assert.equal(blocked.status,409);
+  assert.equal((await blocked.json()).error,'training-private-invoiced');
+  await ok(await cmd('refund',{invoice,payment:receipt.id,amount:'200000',reason:'اصلاح دریافت'}));
+  await ok(await cmd('void',{invoice,reason:'مصرف اعتبار بسته'}));
+
+  const contenders=await Promise.all([cmd('training-redeem',redemption),cmd('issue',{booking:booking.id})]);
+  assert.deepEqual(contenders.map(r=>r.status).sort(),[200,409]);
+  if (contenders[1].ok) {
+    const winner=(await contenders[1].json()).next.split('?')[0].split('/').at(-1);
+    await ok(await cmd('void',{invoice:winner,reason:'اعمال بستهٔ ثبت‌شده'}));
+    await ok(await cmd('training-redeem',redemption));
+  }
+  const after=await cmd('issue',{booking:booking.id});
+  assert.equal(after.status,409);
+  assert.equal((await after.json()).error,'training-private-covered');
+  const calendar=await get(`/club/${org}/calendar/${booking.id}`,owner);
+  assert.equal(calendar.status,200);
+  assert.match(await calendar.text(),/با اعتبار بسته پوشش داده شده است/);
+});
+
 test('leaving preserves the audit trail and removes club access', async () => {
   const manager=identities.get('admin');
   const login=await post('login',{email:manager.email,password:`${password}-next`});

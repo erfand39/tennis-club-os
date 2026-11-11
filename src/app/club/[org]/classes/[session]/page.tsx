@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
 import { branchDateTime,calendarPath,longDay,numberFa } from '@/lib/calendar-dates';
 import { attendanceStates,classStates,classesPath } from '@/lib/class-fields';
+import { operationsPath } from '@/lib/club-finance-fields';
 import { classDetail } from '@/lib/classes';
 import { branches,uuid } from '@/lib/club';
 import { errorMessage } from '@/lib/messages';
@@ -57,6 +58,10 @@ export default async function ClassPage({params,searchParams}:{
         <div><dt>ظرفیت ثبت‌نام</dt><dd>{numberFa.format(active.length)} از {numberFa.format(session.capacity)} نفر</dd></div>
       </dl>
       <Link className="panel-link" href={calendarPath(org,{booking:session.booking_id})}>جزئیات سانس و رزرو</Link>
+      {completed && <div className="finance-shortcuts">
+        <Link className="button subtle" href={operationsPath(org,branch.id,'packages',{session:id})}>مصرف اعتبار جلسه</Link>
+        <Link className="button subtle" href={operationsPath(org,branch.id,'coaches',{session:id})}>تسویهٔ مربی جلسه</Link>
+      </div>}
     </section>
     {completed && <section className="class-totals" aria-label="خلاصهٔ حضور">
       {Object.entries(attendanceStates).map(([key,label])=><article className="stat-card" key={key}>

@@ -84,6 +84,7 @@ export default async function BookingPage({ params, searchParams }: {
         </dl>
         <FinanceActions user={user.id} org={org} branch={branch.id} subject={{booking}}>
           {detail.active_invoice_id ? <Link className="button subtle" href={financePath(org,detail.active_invoice_id)}>مشاهدهٔ فاکتور</Link>
+            : detail.covered_by_training ? <p className="local-notice">هزینهٔ این تمرین با اعتبار بسته پوشش داده شده است.</p>
             : detail.status==='confirmed' && detail.currency && <details className="resource-disclosure">
               <summary>صدور فاکتور</summary>
               <p>مبنای فاکتور، مبلغ ثبت‌شدهٔ سانس است.</p>

@@ -59,13 +59,13 @@ function readProfile(values: URLSearchParams, type: 'coaches' | 'students') {
   if (type === 'students') return { ...person, skill_level: field(values, 'skill_level', 100) };
   const basis = field(values, 'pay_basis', 20);
   const raw = field(values, 'pay_amount_minor', 20);
-  if ((basis && !['hourly','per_session'].includes(basis)) || Boolean(basis) !== Boolean(raw)) throw new InputError('resource-pay');
+  if ((basis && !['hourly','per_session','revenue_share','agreement'].includes(basis)) || Boolean(basis) !== Boolean(raw)) throw new InputError('resource-pay');
   return {
     ...person,
     specialty: field(values, 'specialty', 120),
     qualification: field(values, 'qualification', 240),
     pay_basis: basis,
-    pay_amount_minor: raw ? numeric(raw, 0, 9999999999999) : null,
+    pay_amount_minor: raw ? numeric(raw, 0, basis==='revenue_share'?100:9999999999999) : null,
     court_ids: ids(values, 'court_id'),
   };
 }

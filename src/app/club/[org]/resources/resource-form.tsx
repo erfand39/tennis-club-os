@@ -47,9 +47,9 @@ export function ResourceForm({ org, kind, scope, row, courtOptions = [], selecte
           <label className="field"><span>تخصص و سطح مربیگری</span><input name="specialty" defaultValue={data?.specialty ?? ''} maxLength={120} /></label>
           <label className="field"><span>مدرک یا گواهی مربیگری</span><input name="qualification" defaultValue={data?.qualification ?? ''} maxLength={240} /></label>
           <label className="field"><span>مبنای دستمزد</span><select name="pay_basis" defaultValue={data?.pay_basis ?? ''}>
-            <option value="">تعریف نشده</option><option value="hourly">ساعتی</option><option value="per_session">به‌ازای جلسه</option>
+            <option value="">تعریف نشده</option><option value="hourly">ساعتی</option><option value="revenue_share">درصد دریافتی خالص</option><option value="agreement">توافق اختصاصی</option><option value="per_session">به‌ازای جلسه</option>
           </select></label>
-          <label className="field"><span>مبلغ دستمزد در واحد پایهٔ مجموعه</span><input name="pay_amount_minor" inputMode="numeric" dir="ltr" defaultValue={data?.pay_amount_minor ?? ''} maxLength={20} /></label>
+          <label className="field"><span>مبلغ در واحد پایه یا درصد صحیح (۰ تا ۱۰۰)</span><input name="pay_amount_minor" inputMode="numeric" dir="ltr" defaultValue={data?.pay_amount_minor ?? ''} maxLength={20} /></label>
         </> : <label className="field"><span>سطح مهارت</span><input name="skill_level" defaultValue={data?.skill_level ?? ''} placeholder="مثلاً متوسط" maxLength={100} /></label>}
         <fieldset className="branch-fields resource-full"><legend>شعبه‌های پرونده</legend>
           {choices.map(branch => <label key={branch.id}><input type="checkbox" name="location" value={branch.id}

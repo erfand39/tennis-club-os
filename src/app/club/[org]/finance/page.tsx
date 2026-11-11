@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
 import { addDays,branchDateTime,calendarPath,numberFa,periodDates,validCalendarDate } from '@/lib/calendar-dates';
+import { operationsPath } from '@/lib/club-finance-fields';
 import { branches } from '@/lib/club';
 import { financeOverview } from '@/lib/finance';
 import { financePath,invoiceStates,type InvoiceState } from '@/lib/finance-fields';
@@ -32,7 +33,10 @@ export default async function FinancePage({params,searchParams}:{
   const path=(next:number)=>financePath(org,undefined,{branch:branch.id,from,to,status:status ?? '',number:number,page:String(next)});
   return <>
     <header className="local-heading directory-heading"><div><h1>امور مالی</h1><p>{branch.name}</p></div>
-      <Link className="button subtle" href={calendarPath(org,{branch:branch.id})}>تقویم و صدور فاکتور</Link>
+      <div className="finance-shortcuts">
+        <Link className="button subtle" href={calendarPath(org,{branch:branch.id})}>تقویم و صدور فاکتور</Link>
+        <Link className="button primary" href={operationsPath(org,branch.id,'packages')}>بسته، هزینه و تسویه</Link>
+      </div>
     </header>
     <section className="panel local-panel">
       <form method="get" className="resource-filters finance-filters">
@@ -53,6 +57,8 @@ export default async function FinancePage({params,searchParams}:{
       {([
         ['فاکتورهای معتبر در بازه',item.invoiced],['دریافت در بازه',item.received],['بازپرداخت در بازه',item.refunded],
         ['دریافتی خالص در بازه',item.net],['ماندهٔ جاری شعبه',item.due],
+        ['هزینه در بازه',item.expense],['پرداخت خالص مربیان در بازه',item.coach],['تسویهٔ مصوب پرداخت‌نشده',item.unpaid],
+        ['خالص گردش عملیاتی',item.operating],
       ]).map(([label,value])=><article className="stat-card" key={label}><span className="stat-top">{label}</span>
         <strong className="stat-value">{formatMinor(value,item.currency)}</strong></article>)}
     </section>)}

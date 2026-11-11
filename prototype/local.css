@@ -250,3 +250,13 @@
   .preview-finance-row { grid-template-columns: minmax(0,1fr) auto; }
   .preview-finance-row .resource-status { grid-column: auto; }
 }
+.finance-shortcuts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.finance-operations-nav { margin-bottom: 12px; }
+.operations-filters { grid-template-columns: repeat(3,minmax(130px,1fr)) auto; }
+.operations-row { padding: 10px 4px; }
+.operations-row small, .credit-use small { display: block; color: var(--muted); font-size: 12px; }
+.operations-row strong { overflow-wrap: anywhere; }
+.operations-row .calendar-section-title { margin-bottom: 3px; }
+.credit-use { align-items: start !important; flex-wrap: wrap; }
+.credit-use details { min-width: min(100%,200px); }
+@media (max-width: 630px) { .operations-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } }

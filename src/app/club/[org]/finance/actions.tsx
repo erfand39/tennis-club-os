@@ -10,6 +10,8 @@ type Context={blocked:boolean;send:(command:FinanceCommandName,form:HTMLFormElem
 const FinanceContext=createContext<Context|null>(null);
 const rejectionCodes=new Set([
   'finance-invalid','finance-amount','finance-reason','finance-discount','finance-discount-cap','finance-not-invoiceable',
+  'club-finance-invalid','club-finance-date','club-finance-transition','training-ineligible','training-duplicate',
+  'training-empty','booking-student-unavailable','training-private-covered','training-private-invoiced','training-used','training-cancel-first','coach-estimate-changed','rate-special-conflict',
   'finance-already-invoiced','finance-closed','finance-due','finance-refund-cap','finance-has-receipts',
 ]);
 
@@ -24,9 +26,9 @@ function loadDraft(key:string):Pending|null {
 }
 
 export function FinanceActions({user,org,branch,subject,children}:{
-  user:string;org:string;branch:string;subject:{booking:string}|{invoice:string};children:ReactNode;
+  user:string;org:string;branch:string;subject:{booking:string}|{invoice:string}|{operation:string};children:ReactNode;
 }) {
-  const key=`sam-finance-v1:${user}:${org}:${'invoice' in subject ? 'invoice:'+subject.invoice : 'booking:'+subject.booking}`;
+  const key=`sam-finance-v1:${user}:${org}:${'invoice' in subject ? 'invoice:'+subject.invoice : 'booking' in subject ? 'booking:'+subject.booking : 'operation:'+subject.operation}`;
   const [pending,setPending]=useState<Pending|null>(null);
   const [ready,setReady]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -61,7 +63,7 @@ export function FinanceActions({user,org,branch,subject,children}:{
       body.set('branch',branch);
       body.set('request',draft.request);
       if ('invoice' in subject) body.set('invoice',subject.invoice);
-      else body.set('booking',subject.booking);
+      else if ('booking' in subject) body.set('booking',subject.booking);
       if (checkOnly) body.set('command',draft.command);
       const response=await fetch('/api/'+(checkOnly?'finance-operation':draft.command),{
         method:'POST',headers:{Accept:'application/json'},body,

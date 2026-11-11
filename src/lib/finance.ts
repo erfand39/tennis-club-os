@@ -10,8 +10,8 @@ type InvoiceRow={
 };
 type InvoiceDetail=InvoiceRow & { location_id:string; discount_reason:string|null; voided_at:Date|null; void_reason:string|null };
 type Breakdown={kind:'court'|'coach'; key:string; title:string; currency:string; net:string};
-type Totals={currency:string; invoiced:string; received:string; refunded:string; due:string; net:string};
-type Item={id:string;booking_id:string;amount:string;kind:keyof typeof bookingKinds;court:string;status:'confirmed'|'cancelled';name:string|null;starts_at:Date};
+type Totals={currency:string; invoiced:string; received:string; refunded:string; due:string; net:string; expense:string; coach:string; unpaid:string; operating:string};
+type Item={id:string;booking_id:string|null;package_id:string|null;package_title:string|null;amount:string;kind:keyof typeof bookingKinds|null;court:string|null;status:'confirmed'|'cancelled'|null;name:string|null;starts_at:Date|null};
 type Payment={id:string;amount:string;available:string;method:keyof typeof paymentMethods;reference:string|null;effective_at:Date};
 type Refund={id:string;payment_id:string;amount:string;reason:string;effective_at:Date};
 const amounts=`i.total_amount_minor::text as total,i.discount_minor::text as discount,
@@ -25,25 +25,39 @@ export function financeOverview(user:string,org:string,branch:Branch,from:string
       with period as (
         select $4::date::timestamp at time zone $3 as start_at,$5::date::timestamp at time zone $3 as end_at
       ), amounts as (
-        select i.currency,i.total_amount_minor as invoiced,0 as received,0 as refunded,0 as due
+        select i.currency,i.total_amount_minor as invoiced,0 as received,0 as refunded,0 as due,0 as expense,0 as coach,0 as unpaid
         from public.invoices i cross join period d where i.organization_id=$1 and i.location_id=$2
           and i.voided_at is null and i.issued_at>=d.start_at and i.issued_at<d.end_at
         union all
-        select i.currency,0,p.amount_minor,0,0
+        select i.currency,0,p.amount_minor,0,0,0,0,0
         from public.payments p join public.invoices i on i.id=p.invoice_id cross join period d
         where p.organization_id=$1 and p.location_id=$2 and p.effective_at>=d.start_at and p.effective_at<d.end_at
         union all
-        select i.currency,0,0,r.amount_minor,0
+        select i.currency,0,0,r.amount_minor,0,0,0,0
         from public.refunds r join public.payments p on p.id=r.payment_id join public.invoices i on i.id=p.invoice_id cross join period d
         where r.organization_id=$1 and r.location_id=$2 and r.effective_at>=d.start_at and r.effective_at<d.end_at
         union all
-        select b.currency,0,0,0,b.due_minor from public.invoice_balances b
+        select b.currency,0,0,0,b.due_minor,0,0,0 from public.invoice_balances b
         where b.organization_id=$1 and b.location_id=$2 and b.due_minor>0
         union all
-        select currency,0,0,0,0 from public.organizations where id=$1
+        select currency,0,0,0,0,0,0,0 from public.organizations where id=$1
+        union all
+        select e.currency,0,0,0,0,e.amount_minor,0,0 from public.club_expenses e
+        where e.organization_id=$1 and e.location_id=$2 and e.voided_at is null and e.effective_on>=$4::date and e.effective_on<$5::date
+        union all
+        select p.currency,0,0,0,0,0,p.amount_minor,0 from public.coach_payables p cross join period d
+        where p.organization_id=$1 and p.location_id=$2 and p.paid_at>=d.start_at and p.paid_at<d.end_at
+        union all
+        select p.currency,0,0,0,0,0,a.delta_minor,0 from public.coach_payment_adjustments a
+        join public.coach_payables p on p.id=a.payable_id cross join period d
+        where a.organization_id=$1 and a.location_id=$2 and a.effective_at>=d.start_at and a.effective_at<d.end_at
+        union all
+        select p.currency,0,0,0,0,0,0,p.amount_minor from public.coach_payables p
+        where p.organization_id=$1 and p.location_id=$2 and p.status='approved'
       )
       select currency,sum(invoiced)::text as invoiced,sum(received)::text as received,sum(refunded)::text as refunded,
-        (sum(received)-sum(refunded))::text as net,sum(due)::text as due
+        (sum(received)-sum(refunded))::text as net,sum(due)::text as due,sum(expense)::text as expense,sum(coach)::text as coach,sum(unpaid)::text as unpaid,
+        (sum(received)-sum(refunded)-sum(expense)-sum(coach))::text as operating
       from amounts group by currency order by currency
     `,params)).rows;
     const rows=(await db.query<InvoiceRow>(`
@@ -100,9 +114,10 @@ export function financeInvoice(user:string,org:string,invoice:string) {
     if (!detail) return null;
     const scope=[org,detail.location_id,invoice];
     const items=(await db.query<Item>(`
-      select li.id,li.booking_id,li.amount_minor::text as amount,b.kind,c.name as court,b.status,
-        coalesce(b.booker_name,coach.name) as name,b.starts_at
-      from public.invoice_items li join public.bookings b on b.id=li.booking_id join public.courts c on c.id=b.court_id
+      select li.id,li.booking_id,li.package_id,t.title as package_title,li.amount_minor::text as amount,b.kind,c.name as court,b.status,
+        coalesce(b.booker_name,coach.name,student.name) as name,b.starts_at
+      from public.invoice_items li left join public.bookings b on b.id=li.booking_id left join public.courts c on c.id=b.court_id
+      left join public.training_packages t on t.id=li.package_id left join public.student_profiles student on student.id=t.student_id
       left join public.sessions s on s.booking_id=b.id
       left join public.coach_profiles coach on coach.id=s.coach_id
       where (li.organization_id,li.location_id,li.invoice_id)=($1,$2,$3) order by li.id

@@ -1,5 +1,7 @@
 import 'server-only';
 import { bookingError } from './booking-commands';
+import { isClubFinanceCommand } from './club-finance-fields';
+import { runClubFinanceAction } from './club-finance-commands';
 import { uuid } from './club';
 import { asUser } from './db';
 import { financeCommands,financePath,isFinanceCommand,paymentMethods,type FinanceCommandName } from './finance-fields';
@@ -34,9 +36,11 @@ export async function runFinanceAction(action:FinanceAction,form:URLSearchParams
     return await asUser(user,async db=>{
       const branchVisible=await db.query('select 1 from public.locations where organization_id=$1 and id=$2',[org,branch]);
       if (!branchVisible.rowCount) throw new InputError('denied',403);
+      if (isClubFinanceCommand(action)) return runClubFinanceAction(db,action,form,org,branch,request,false);
       if (action==='finance-operation') {
         const name=form.get('command') ?? '';
         if (!isFinanceCommand(name)) throw new InputError('finance-invalid');
+        if (isClubFinanceCommand(name)) return runClubFinanceAction(db,name,form,org,branch,request,true);
         const {rows:[result]}=await db.query<{id:string|null}>('select public.finance_command_result($1,$2,$3,$4) as id',
           [org,branch,financeCommands[name],request]);
         return result.id ? {next:financePath(org,result.id,{saved:'1'})} : {status:'unconfirmed'};
@@ -83,9 +87,18 @@ export async function runFinanceAction(action:FinanceAction,form:URLSearchParams
       invalid_invoice_discount:['finance-discount'],invoice_discount_exceeds_price:['finance-discount-cap',409],
       invoice_not_payable:['finance-closed',409],payment_exceeds_due:['finance-due',409],refund_exceeds_payment:['finance-refund-cap',409],
       invoice_has_receipts:['finance-has-receipts',409],invoice_void_reason_required:['finance-reason'],
+      finance_cancel_package_first:['training-cancel-first',409], training_not_eligible:['training-ineligible',409],
+      training_private_already_billed:['training-private-invoiced',409], training_private_covered:['training-private-covered',409],
+      student_unavailable:['booking-student-unavailable'], training_already_redeemed:['training-duplicate',409], training_no_credit:['training-empty',409],
+      training_has_consumption:['training-used',409], club_finance_transition:['club-finance-transition',409],
+      coach_estimate_changed:['coach-estimate-changed',409], club_finance_date:['club-finance-date'],
+      club_finance_reason:['finance-reason'], club_finance_invalid:['club-finance-invalid'],
       invalid_refund:['finance-invalid'],invalid_payment:['finance-invalid'],request_payload_mismatch:['finance-request',409],
     };
+    if (db.code==='23P01' && action==='finance-rate-special') throw new InputError('rate-special-conflict',409);
     const match=errors[db.message ?? ''];
-    throw match ? new InputError(...match) : bookingError(db) ?? failure;
+    if (match) throw new InputError(...match);
+    if (isClubFinanceCommand(action) && (db.code?.startsWith('22') || db.code?.startsWith('23'))) throw new InputError('club-finance-invalid');
+    throw bookingError(db) ?? failure;
   }
 }

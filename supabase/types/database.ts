@@ -193,6 +193,63 @@ export type Database = {
           },
         ]
       }
+      club_expenses: {
+        Row: {
+          amount_minor: number
+          category: string
+          created_at: string
+          created_by: string
+          currency: string
+          effective_on: string
+          id: string
+          location_id: string
+          method: Database["public"]["Enums"]["payment_method"]
+          organization_id: string
+          title: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          amount_minor: number
+          category: string
+          created_at?: string
+          created_by: string
+          currency: string
+          effective_on: string
+          id?: string
+          location_id: string
+          method: Database["public"]["Enums"]["payment_method"]
+          organization_id: string
+          title: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Update: {
+          amount_minor?: number
+          category?: string
+          created_at?: string
+          created_by?: string
+          currency?: string
+          effective_on?: string
+          id?: string
+          location_id?: string
+          method?: Database["public"]["Enums"]["payment_method"]
+          organization_id?: string
+          title?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_expenses_organization_id_location_id_fkey"
+            columns: ["organization_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       coach_availability: {
         Row: {
           coach_id: string
@@ -303,6 +360,105 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "locations"
             referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      coach_payables: {
+        Row: {
+          amount_minor: number | null
+          approved_at: string | null
+          basis_minor: number | null
+          currency: string
+          id: string
+          location_id: string
+          manual_amount_minor: number | null
+          organization_id: string
+          paid_at: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference: string | null
+          session_id: string
+          status: string
+        }
+        ComputedFields: never
+        Insert: {
+          amount_minor?: number | null
+          approved_at?: string | null
+          basis_minor?: number | null
+          currency: string
+          id?: string
+          location_id: string
+          manual_amount_minor?: number | null
+          organization_id: string
+          paid_at?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
+          session_id: string
+          status?: string
+        }
+        Update: {
+          amount_minor?: number | null
+          approved_at?: string | null
+          basis_minor?: number | null
+          currency?: string
+          id?: string
+          location_id?: string
+          manual_amount_minor?: number | null
+          organization_id?: string
+          paid_at?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
+          session_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_payables_organization_id_location_id_session_id_fkey"
+            columns: ["organization_id", "location_id", "session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["organization_id", "location_id", "id"]
+          },
+        ]
+      }
+      coach_payment_adjustments: {
+        Row: {
+          delta_minor: number
+          effective_at: string
+          id: string
+          location_id: string
+          organization_id: string
+          payable_id: string
+          reason: string
+          recorded_by: string
+        }
+        ComputedFields: never
+        Insert: {
+          delta_minor: number
+          effective_at?: string
+          id?: string
+          location_id: string
+          organization_id: string
+          payable_id: string
+          reason: string
+          recorded_by: string
+        }
+        Update: {
+          delta_minor?: number
+          effective_at?: string
+          id?: string
+          location_id?: string
+          organization_id?: string
+          payable_id?: string
+          reason?: string
+          recorded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_payment_adjustments_organization_id_location_id_paya_fkey"
+            columns: ["organization_id", "location_id", "payable_id"]
+            isOneToOne: false
+            referencedRelation: "coach_payables"
+            referencedColumns: ["organization_id", "location_id", "id"]
           },
         ]
       }
@@ -502,30 +658,33 @@ export type Database = {
         Row: {
           active: boolean
           amount_minor: number
-          booking_id: string
+          booking_id: string | null
           id: string
           invoice_id: string
           location_id: string
           organization_id: string
+          package_id: string | null
         }
         ComputedFields: never
         Insert: {
           active?: boolean
           amount_minor: number
-          booking_id: string
+          booking_id?: string | null
           id?: string
           invoice_id: string
           location_id: string
           organization_id: string
+          package_id?: string | null
         }
         Update: {
           active?: boolean
           amount_minor?: number
-          booking_id?: string
+          booking_id?: string | null
           id?: string
           invoice_id?: string
           location_id?: string
           organization_id?: string
+          package_id?: string | null
         }
         Relationships: [
           {
@@ -547,6 +706,13 @@ export type Database = {
             columns: ["organization_id", "location_id", "invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["organization_id", "location_id", "id"]
+          },
+          {
+            foreignKeyName: "invoice_items_organization_id_location_id_package_id_fkey"
+            columns: ["organization_id", "location_id", "package_id"]
+            isOneToOne: false
+            referencedRelation: "training_packages"
             referencedColumns: ["organization_id", "location_id", "id"]
           },
         ]
@@ -869,6 +1035,51 @@ export type Database = {
           },
         ]
       }
+      pricing_specials: {
+        Row: {
+          amount_minor: number
+          duration_minutes: unknown
+          id: string
+          local_minutes: unknown
+          location_id: string
+          organization_id: string
+          rate_id: string
+          retired_at: string | null
+          weekday: number
+        }
+        ComputedFields: never
+        Insert: {
+          amount_minor: number
+          duration_minutes: unknown
+          id?: string
+          local_minutes: unknown
+          location_id: string
+          organization_id: string
+          rate_id: string
+          retired_at?: string | null
+          weekday: number
+        }
+        Update: {
+          amount_minor?: number
+          duration_minutes?: unknown
+          id?: string
+          local_minutes?: unknown
+          location_id?: string
+          organization_id?: string
+          rate_id?: string
+          retired_at?: string | null
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_specials_organization_id_location_id_rate_id_fkey"
+            columns: ["organization_id", "location_id", "rate_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_rules"
+            referencedColumns: ["organization_id", "location_id", "id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           display_name: string
@@ -1015,6 +1226,9 @@ export type Database = {
           id: string
           location_id: string
           organization_id: string
+          pay_basis_snapshot: string | null
+          pay_currency_snapshot: string | null
+          pay_rate_snapshot: number | null
           program_id: string | null
           revision: number
           status: Database["public"]["Enums"]["session_status"]
@@ -1028,6 +1242,9 @@ export type Database = {
           id?: string
           location_id: string
           organization_id: string
+          pay_basis_snapshot?: string | null
+          pay_currency_snapshot?: string | null
+          pay_rate_snapshot?: number | null
           program_id?: string | null
           revision?: number
           status?: Database["public"]["Enums"]["session_status"]
@@ -1040,6 +1257,9 @@ export type Database = {
           id?: string
           location_id?: string
           organization_id?: string
+          pay_basis_snapshot?: string | null
+          pay_currency_snapshot?: string | null
+          pay_rate_snapshot?: number | null
           program_id?: string | null
           revision?: number
           status?: Database["public"]["Enums"]["session_status"]
@@ -1162,6 +1382,126 @@ export type Database = {
           },
         ]
       }
+      training_packages: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string
+          organization_id: string
+          sessions: number | null
+          status: string
+          student_id: string
+          title: string
+          valid_from: string
+          valid_until: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id: string
+          organization_id: string
+          sessions?: number | null
+          status?: string
+          student_id: string
+          title: string
+          valid_from: string
+          valid_until: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string
+          organization_id?: string
+          sessions?: number | null
+          status?: string
+          student_id?: string
+          title?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_packages_organization_id_location_id_student_id_fkey"
+            columns: ["organization_id", "location_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "student_locations"
+            referencedColumns: ["organization_id", "location_id", "student_id"]
+          },
+        ]
+      }
+      training_uses: {
+        Row: {
+          id: string
+          location_id: string
+          organization_id: string
+          package_id: string
+          participant_id: string
+          reversal_reason: string | null
+          reversed_at: string | null
+          student_id: string
+          used_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          id?: string
+          location_id: string
+          organization_id: string
+          package_id: string
+          participant_id: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          student_id: string
+          used_at?: string
+        }
+        Update: {
+          id?: string
+          location_id?: string
+          organization_id?: string
+          package_id?: string
+          participant_id?: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          student_id?: string
+          used_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_uses_organization_id_location_id_student_id_packa_fkey"
+            columns: [
+              "organization_id",
+              "location_id",
+              "student_id",
+              "package_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "training_packages"
+            referencedColumns: [
+              "organization_id",
+              "location_id",
+              "student_id",
+              "id",
+            ]
+          },
+          {
+            foreignKeyName: "training_uses_organization_id_location_id_student_id_parti_fkey"
+            columns: [
+              "organization_id",
+              "location_id",
+              "student_id",
+              "participant_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "session_participants"
+            referencedColumns: [
+              "organization_id",
+              "location_id",
+              "student_id",
+              "id",
+            ]
+          },
+        ]
+      }
     }
     Views: {
       invoice_balances: {
@@ -1249,6 +1589,15 @@ export type Database = {
         }
         Returns: string
       }
+      club_finance_result: {
+        Args: {
+          p_command: string
+          p_location: string
+          p_org: string
+          p_request: string
+        }
+        Returns: string
+      }
       club_members: {
         Args: { p_org: string }
         Returns: {
@@ -1332,6 +1681,16 @@ export type Database = {
           p_revision: number
           p_session: string
           p_start: string
+        }
+        Returns: string
+      }
+      record_club_finance: {
+        Args: {
+          p_command: string
+          p_data: Json
+          p_location: string
+          p_org: string
+          p_request: string
         }
         Returns: string
       }

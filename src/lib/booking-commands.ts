@@ -108,10 +108,11 @@ export async function runBookingAction(action: BookingAction, form: URLSearchPar
       const draft = await readDraft(db,org,branch,form);
       if (action==='booking-quote') {
         const { rows } = await db.query<Price & { unit: number; whole_units: boolean }>(`
-          select (r.amount_minor::numeric*($7::int/r.unit_minutes))::text as amount,o.currency,r.unit_minutes as unit,
+          select (tennis_private.booking_unit_rate(r.id,tstzrange($5,$6,'[)'),l.timezone,$7)::numeric*($7::int/r.unit_minutes))::text as amount,o.currency,r.unit_minutes as unit,
             mod($7::int,r.unit_minutes)=0 as whole_units
           from public.pricing_rules r join public.organizations o on o.id=r.organization_id
           join public.courts c on (c.organization_id,c.location_id,c.id)=(r.organization_id,r.location_id,r.court_id)
+          join public.locations l on (l.organization_id,l.id)=(r.organization_id,r.location_id)
           where (r.organization_id,r.location_id,r.court_id,r.kind)=($1,$2,$3,$4) and c.status='active'
             and r.effective @> tstzrange($5,$6,'[)')
         `,[org,branch,draft.court,draft.kind,draft.start,draft.end,draft.minutes]);
