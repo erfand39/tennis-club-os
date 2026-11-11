@@ -2,6 +2,7 @@ import 'server-only';
 import { type PoolClient } from 'pg';
 import { uuid } from './club';
 import { asUser } from './db';
+import { parseMinor } from './money';
 import { InputError } from './input';
 import { asciiDigits, bookingKinds, isResourceKind, resourceKinds, resourcePath } from './resource-fields';
 
@@ -135,9 +136,13 @@ export async function runResourceCommand(action: ResourceCommand, values: URLSea
     if (!Object.hasOwn(bookingKinds,booking)) throw new InputError('resource-invalid');
     const from = date(field(values,'from',10,true));
     const unit = numeric(field(values,'unit_minutes',8),1,1440);
-    const amount = numeric(field(values,'amount_minor',20),0,9999999999999);
-    await asUser(user, db => db.query('select public.set_court_rate($1,$2,$3,$4,$5,$6,$7,$8)',
-      [org,location,target,booking,from,unit,amount,request]));
+    await asUser(user, async db=>{
+      const {rows:[club]}=await db.query<{currency:string}>('select currency from public.organizations where id=$1',[org]);
+      const amount=parseMinor(field(values,'amount_minor',24,true),values.get('unit') ?? 'minor',club?.currency ?? '');
+      if (amount===null) throw new InputError('finance-amount');
+      return db.query('select public.set_court_rate($1,$2,$3,$4,$5,$6,$7,$8)',
+        [org,location,target,booking,from,unit,amount.toString(),request]);
+    });
   } else if (action === 'resource-block' && kind === 'courts') {
     const from = asciiDigits(field(values,'starts_at',16,true));
     const to = asciiDigits(field(values,'ends_at',16,true));

@@ -123,6 +123,15 @@ before(async () => {
   const migrations = new URL('../supabase/migrations/', import.meta.url);
   for (const file of (await readdir(migrations)).filter(file => file.endsWith('.sql')).sort()) {
     try {
+      if (file.endsWith('_finance_workflow.sql')) {
+        await db.query("insert into public.locations (id,organization_id,name,timezone) values ($1,$2,'شعبهٔ دادهٔ قبلی','Asia/Tehran')",[id(311),id(301)]);
+        await db.query("insert into public.invoices (id,organization_id,location_id,currency,total_amount_minor,issued_by) values ($1,$2,$3,'IRR',10000,$4)",
+          [id(381),id(301),id(311),users.owner]);
+        await db.query("insert into public.payments (id,organization_id,location_id,invoice_id,method,amount_minor,received_by) values ($1,$2,$3,$4,'cash',6000,$5)",
+          [id(382),id(301),id(311),id(381),users.owner]);
+        await db.query("insert into public.refunds (organization_id,location_id,payment_id,amount_minor,reason,recorded_by) values ($1,$2,$3,2000,'بازپرداخت قدیمی',$4)",
+          [id(301),id(311),id(382),users.owner]);
+      }
       await db.query(await readFile(new URL(file, migrations), 'utf8'));
       if (file.endsWith('_club_identity.sql')) {
         await db.query("insert into public.organizations (id,name) values ($1,'دادهٔ نسخهٔ قبلی')",[id(301)]);
@@ -303,6 +312,14 @@ test('financial snapshot, concurrent payments and refunds, and restricted access
     await sibling.query('rollback');
   }
   assert.equal(await scalar(owner, 'select due_minor from public.invoice_balances where invoice_id=$1', [invoice]), '100000');
+});
+
+test('finance upgrade numbers an existing invoice and preserves its reconciled balance', async () => {
+  const {rows:[record]}=await db.query(`select i.invoice_number,i.discount_minor,i.voided_at,b.received_minor,b.due_minor,b.status
+    from public.invoices i join public.invoice_balances b on b.invoice_id=i.id where i.id=$1`,[id(381)]);
+  assert(BigInt(record.invoice_number)>0n);
+  assert.deepEqual([record.discount_minor,record.voided_at,record.received_minor,record.due_minor,record.status],
+    ['0',null,'4000','6000','partial']);
 });
 
 test('schedule version prevents stale decisions at repeatable read', async () => {

@@ -5,6 +5,8 @@ import { branches, uuid } from '@/lib/club';
 import { calendarBooking, calendarBookingOptions, calendarCourts } from '@/lib/calendar';
 import { branchDateTime, calendarDateTime, calendarPath, longDay, numberFa, validCalendarDate } from '@/lib/calendar-dates';
 import { classesPath } from '@/lib/class-fields';
+import { financePath } from '@/lib/finance-fields';
+import { AmountFields,FinanceActions,FinanceForm } from '../../finance/actions';
 import { errorMessage } from '@/lib/messages';
 import { bookingKinds, resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
@@ -80,6 +82,17 @@ export default async function BookingPage({ params, searchParams }: {
           <div><dt>مبلغ ثبت‌شده</dt><dd>{detail.amount!==null && detail.currency ? displayPrice(detail.amount,detail.currency) : '—'}</dd></div>
           {detail.cancellation_reason && <div><dt>علت لغو</dt><dd>{detail.cancellation_reason}</dd></div>}
         </dl>
+        <FinanceActions user={user.id} org={org} branch={branch.id} subject={{booking}}>
+          {detail.active_invoice_id ? <Link className="button subtle" href={financePath(org,detail.active_invoice_id)}>مشاهدهٔ فاکتور</Link>
+            : detail.status==='confirmed' && detail.currency && <details className="resource-disclosure">
+              <summary>صدور فاکتور</summary>
+              <p>مبنای فاکتور، مبلغ ثبت‌شدهٔ سانس است.</p>
+              <FinanceForm command="finance-issue" label="صدور فاکتور">
+                <AmountFields currency={detail.currency} name="discount" label="مبلغ تخفیف (اختیاری)" required={false} />
+                <label className="field"><span>علت تخفیف</span><input name="reason" maxLength={250} /></label>
+              </FinanceForm>
+            </details>}
+        </FinanceActions>
         {detail.session_id && <Link className="button subtle" href={classesPath(org,detail.session_id)}>کلاس و حضور و غیاب</Link>}
         {canChange && branch.active && <details className="resource-disclosure">
           <summary>جابه‌جایی سانس</summary><p>تاریخ یا ساعت شروع را تغییر دهید. زمین، مدت و مبلغ ثبت‌شده حفظ می‌شوند.</p>

@@ -1,3 +1,4 @@
+import { AmountFields } from '../finance/actions';
 import type { Branch } from '@/lib/club';
 import { bookingKinds, faNumber, localDate, minutesLabel, persianDate, weekdays } from '@/lib/resource-fields';
 import type { CourtBlock, CourtRate, HoursEntry } from '@/lib/resources';
@@ -66,7 +67,7 @@ export function CourtSettings({ org,id,branch,rates,blocks,currency }: {
               <option value={key} key={key}>{label}</option>)}</select></label>
             <label className="field"><span>تاریخ شروع اثر</span><input name="from" type="date" dir="ltr" defaultValue={today} min={today} required /></label>
             <label className="field"><span>مدت واحد به دقیقه</span><input name="unit_minutes" dir="ltr" inputMode="numeric" defaultValue="60" maxLength={4} required /></label>
-            <label className="field"><span>مبلغ هر واحد به {unit}</span><input name="amount_minor" dir="ltr" inputMode="numeric" maxLength={20} required /></label>
+            <div className="resource-full"><AmountFields currency={currency} name="amount_minor" label="مبلغ هر واحد" /></div>
           </div>
         </ResourceCommand>
       </details>}

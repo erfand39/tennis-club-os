@@ -500,6 +500,7 @@ export type Database = {
       }
       invoice_items: {
         Row: {
+          active: boolean
           amount_minor: number
           booking_id: string
           id: string
@@ -509,6 +510,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          active?: boolean
           amount_minor: number
           booking_id: string
           id?: string
@@ -517,6 +519,7 @@ export type Database = {
           organization_id: string
         }
         Update: {
+          active?: boolean
           amount_minor?: number
           booking_id?: string
           id?: string
@@ -551,34 +554,52 @@ export type Database = {
       invoices: {
         Row: {
           currency: string
+          discount_minor: number
+          discount_reason: string | null
           id: string
+          invoice_number: number
           issued_at: string
           issued_by: string
           location_id: string
           organization_id: string
           revision: number
           total_amount_minor: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         ComputedFields: never
         Insert: {
           currency: string
+          discount_minor?: number
+          discount_reason?: string | null
           id?: string
+          invoice_number?: never
           issued_at?: string
           issued_by: string
           location_id: string
           organization_id: string
           revision?: number
           total_amount_minor: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           currency?: string
+          discount_minor?: number
+          discount_reason?: string | null
           id?: string
+          invoice_number?: never
           issued_at?: string
           issued_by?: string
           location_id?: string
           organization_id?: string
           revision?: number
           total_amount_minor?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -764,6 +785,7 @@ export type Database = {
           method: Database["public"]["Enums"]["payment_method"]
           organization_id: string
           received_by: string
+          reference: string | null
         }
         ComputedFields: never
         Insert: {
@@ -775,6 +797,7 @@ export type Database = {
           method: Database["public"]["Enums"]["payment_method"]
           organization_id: string
           received_by: string
+          reference?: string | null
         }
         Update: {
           amount_minor?: number
@@ -785,6 +808,7 @@ export type Database = {
           method?: Database["public"]["Enums"]["payment_method"]
           organization_id?: string
           received_by?: string
+          reference?: string | null
         }
         Relationships: [
           {
@@ -1265,15 +1289,36 @@ export type Database = {
         }
         Returns: string
       }
-      issue_booking_invoice: {
+      finance_command_result: {
         Args: {
-          p_booking: string
+          p_command: string
           p_location: string
           p_org: string
           p_request: string
         }
         Returns: string
       }
+      issue_booking_invoice:
+        | {
+            Args: {
+              p_booking: string
+              p_discount: number
+              p_location: string
+              p_org: string
+              p_reason: string
+              p_request: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_booking: string
+              p_location: string
+              p_org: string
+              p_request: string
+            }
+            Returns: string
+          }
       leave_club: { Args: { p_org: string }; Returns: undefined }
       record_class_attendance: {
         Args: {
@@ -1290,17 +1335,30 @@ export type Database = {
         }
         Returns: string
       }
-      record_payment: {
-        Args: {
-          p_amount: number
-          p_invoice: string
-          p_location: string
-          p_method: Database["public"]["Enums"]["payment_method"]
-          p_org: string
-          p_request: string
-        }
-        Returns: string
-      }
+      record_payment:
+        | {
+            Args: {
+              p_amount: number
+              p_invoice: string
+              p_location: string
+              p_method: Database["public"]["Enums"]["payment_method"]
+              p_org: string
+              p_reference: string
+              p_request: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_amount: number
+              p_invoice: string
+              p_location: string
+              p_method: Database["public"]["Enums"]["payment_method"]
+              p_org: string
+              p_request: string
+            }
+            Returns: string
+          }
       record_refund: {
         Args: {
           p_amount: number
@@ -1407,6 +1465,16 @@ export type Database = {
       update_my_profile: {
         Args: { p_display_name: string }
         Returns: undefined
+      }
+      void_invoice: {
+        Args: {
+          p_invoice: string
+          p_location: string
+          p_org: string
+          p_reason: string
+          p_request: string
+        }
+        Returns: string
       }
       withdraw_session_participant: {
         Args: {

@@ -1,5 +1,6 @@
 import { type Booking } from '@/lib/calendar';
-import { branchDateTime, numberFa } from '@/lib/calendar-dates';
+import { formatMinor } from '@/lib/money';
+import { branchDateTime } from '@/lib/calendar-dates';
 
 export function BookingStatus({ booking }: { booking: Booking }) {
   const status = booking.status === 'cancelled' ? 'لغوشده' : booking.session_status === 'completed' ? 'برگزارشده' : 'تأییدشده';
@@ -10,6 +11,4 @@ export function LocalTimeRange({ start,end,zone }: { start: Date; end: Date; zon
   const b = branchDateTime(zone,end);
   return <bdi className="calendar-time" dir="ltr">{a.hour}–{a.date !== b.date && b.hour==='00:00' ? '24:00' : b.hour}</bdi>;
 }
-export function displayPrice(amount: string, currency: string) {
-  return `${numberFa.format(BigInt(amount))} ${currency==='IRR' ? 'ریال' : currency}`;
-}
+export const displayPrice = formatMinor;

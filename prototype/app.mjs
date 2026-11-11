@@ -92,6 +92,7 @@ root.innerHTML = `
     </a>
     ${navLinks('side-nav')}
     <div class="sidebar-bottom">
+      <a class="sidebar-help" href="./finance.html">${icon('dashboard',18)} امور مالی</a>
       <a class="sidebar-help" href="./manage.html">${icon('people', 18)} مدیریت پرونده‌ها</a>
       <a class="sidebar-help" href="./access.html">${icon('people', 18)} نمونهٔ ورود و دسترسی</a>
       <button class="sidebar-help" data-action="help">${icon('info', 18)} نمونهٔ تعاملی</button>
@@ -518,7 +519,8 @@ function help() {
     <p class="dialog-copy">تاریخ نمونه چهارشنبه ۲۰ آبان ۱۴۰۵ است. نام‌ها، رزروها و تعرفه‌ها ساختگی‌اند. ثبت و تغییر سانس روی همین مرورگر ذخیره می‌شود.</p>
     <footer class="dialog-actions"><button class="button subtle" data-action="reset-prompt">${icon('refresh', 18)} بازنشانی داده‌های نمونه</button>
     <a class="button subtle" href="./access.html">نمونهٔ ورود و دسترسی</a>
-    <a class="button subtle" href="./manage.html">مدیریت پرونده‌ها</a></footer>`);
+    <a class="button subtle" href="./manage.html">مدیریت پرونده‌ها</a>
+    <a class="button subtle" href="./finance.html">امور مالی</a></footer>`);
 }
 
 function complete(message) {

@@ -406,6 +406,99 @@ test('class roster and attendance stay consistent with capacity, correction and 
   assert.equal((await rejected.json()).error,'attendance-closed');
 });
 
+test('finance issues and reconciles invoices with exact units and durable command results', async () => {
+  const {rows:[booking]}=await db.query(`select b.id,p.amount_minor::text as amount from public.bookings b
+    join public.booking_prices p on p.booking_id=b.id
+    where b.organization_id=$1 and b.location_id=$2 and b.kind='rental' and b.status='confirmed' order by b.starts_at,b.id limit 1`,[org,branch]);
+  assert.equal(booking.amount,'1500000');
+  const endpoint=(action,values,cookie=owner,location=branch)=>post('finance-'+action,{org,branch:location,request:randomUUID(),...values},cookie);
+  const ok=async response=>{
+    const result=await response.json();
+    assert.equal(response.status,200,JSON.stringify(result));
+    return result;
+  };
+  assert.match(await (await get(`/club/${org}/calendar/${booking.id}`,owner)).text(),/صدور فاکتور/);
+  const discount={booking:booking.id,discount:'۱۰٬۰۰۰',unit:'toman',reason:'تخفیف آزمون',request:randomUUID()};
+  const issue=await ok(await endpoint('issue',discount));
+  const invoice=issue.next.split('?')[0].split('/').at(-1);
+  assert.deepEqual(await ok(await endpoint('issue',discount)),issue);
+  const duplicate=await endpoint('issue',{...discount,request:randomUUID()});
+  assert.equal(duplicate.status,409);
+  assert.equal((await duplicate.json()).error,'finance-already-invoiced');
+  const {rows:[issued]}=await db.query('select invoice_number,total_amount_minor,discount_minor from public.invoices where id=$1',[invoice]);
+  assert.deepEqual([issued.total_amount_minor,issued.discount_minor],['1400000','100000']);
+  assert.match(await (await get(issue.next,owner)).text(),/تخفیف آزمون/);
+
+  const payment={invoice,amount:'۹٬۰۰۰',method:'transfer',unit:'minor',reference:'رسید آزمون',request:randomUUID()};
+  assert.equal((await endpoint('operation',{command:'finance-payment',request:payment.request})).status,200);
+  // Discard the successful response body and recover from the durable server receipt with the same key.
+  const ignored=await endpoint('payment',payment);
+  assert.equal(ignored.status,200,ignored.status===200?'':await ignored.text());
+  await ignored.body?.cancel();
+  const recovered=await ok(await endpoint('operation',{command:'finance-payment',request:payment.request}));
+  assert.equal(recovered.next,issue.next);
+  await ok(await endpoint('payment',payment));
+  const wrongPayload=await endpoint('payment',{...payment,amount:'۹۰۰۱'});
+  assert.equal(wrongPayload.status,409);
+  assert.equal((await wrongPayload.json()).error,'finance-request');
+  assert.equal((await db.query('select count(*)::int as n from public.payments where invoice_id=$1',[invoice])).rows[0].n,1);
+  await ok(await endpoint('payment',{...payment,request:randomUUID(),unit:'toman'}));
+  const {rows:payments}=await db.query('select id,amount_minor from public.payments where invoice_id=$1 order by amount_minor',[invoice]);
+  assert.deepEqual(payments.map(item=>item.amount_minor),['9000','90000']);
+  const deniedVoid=await endpoint('void',{invoice,reason:'ثبت مجدد'});
+  assert.equal(deniedVoid.status,409);
+  assert.equal((await deniedVoid.json()).error,'finance-has-receipts');
+  const tooMuch=await endpoint('payment',{invoice,amount:'1400000',method:'cash'});
+  assert.equal(tooMuch.status,409);
+  assert.equal((await tooMuch.json()).error,'finance-due');
+  const partial={invoice,payment:payments[1].id,amount:'۳۰٬۰۰۰',reason:'بازپرداخت جزئی',request:randomUUID()};
+  await ok(await endpoint('refund',partial));
+  assert.equal((await ok(await endpoint('operation',{command:'finance-refund',request:partial.request}))).next,issue.next);
+  await ok(await endpoint('refund',partial));
+  const above=await endpoint('refund',{...partial,request:randomUUID(),amount:'60001'});
+  assert.equal(above.status,409);
+  assert.equal((await above.json()).error,'finance-refund-cap');
+  const {rows:[partialBalance]}=await db.query('select received_minor,due_minor,status from public.invoice_balances where invoice_id=$1',[invoice]);
+  assert.deepEqual(partialBalance,{received_minor:'69000',due_minor:'1331000',status:'partial'});
+
+  const listPath=`/club/${org}/finance?branch=${branch}&number=${issued.invoice_number}`;
+  const list=await get(listPath,owner);
+  assert.equal(list.status,200);
+  const summary=(await list.text()).replaceAll('<!-- -->','');
+  for (const label of ['۹۹٬۰۰۰ ریال','۳۰٬۰۰۰ ریال','۶۹٬۰۰۰ ریال','۱٬۳۳۱٬۰۰۰ ریال']) assert(summary.includes(label),label);
+  assert.match(summary,/دریافتی خالص به تفکیک زمین/);
+  assert.match(summary,/سانس بدون مربی/);
+  assert.match(await (await get(issue.next,owner)).text(),/رسید آزمون/);
+  await ok(await endpoint('refund',{...partial,request:randomUUID(),amount:'60000'}));
+  await ok(await endpoint('refund',{...partial,request:randomUUID(),payment:payments[0].id,amount:'9000'}));
+  await ok(await endpoint('void',{invoice,reason:'ثبت دوباره با مبلغ درست'}));
+  const {rows:[voided]}=await db.query('select due_minor,received_minor,status from public.invoice_balances where invoice_id=$1',[invoice]);
+  assert.deepEqual(voided,{due_minor:'0',received_minor:'0',status:'voided'});
+  const afterVoid=await endpoint('payment',{invoice,amount:'1',method:'cash'});
+  assert.equal(afterVoid.status,409);
+  assert.equal((await afterVoid.json()).error,'finance-closed');
+  const reissue=await ok(await endpoint('issue',{booking:booking.id}));
+  assert.notEqual(reissue.next,issue.next);
+  assert.equal((await db.query('select count(*)::int as n from public.invoice_items where booking_id=$1 and active',[booking.id])).rows[0].n,1);
+  const newInvoice=reissue.next.split('?')[0].split('/').at(-1);
+  const {rows:[revision]}=await db.query('select revision from public.bookings where id=$1',[booking.id]);
+  const cancel=await post('booking-cancel',{org,branch,booking:booking.id,revision:revision.revision,reason:'لغو آزمایشی سانس',request:randomUUID()},owner);
+  assert.equal(cancel.status,200,await cancel.text());
+  assert.equal((await db.query('select due_minor from public.invoice_balances where invoice_id=$1',[newInvoice])).rows[0].due_minor,'1500000');
+  await ok(await endpoint('void',{invoice:newInvoice,reason:'سانس لغو شد'}));
+  const issueCancelled=await endpoint('issue',{booking:booking.id});
+  assert.equal(issueCancelled.status,409);
+  assert.equal((await issueCancelled.json()).error,'finance-not-invoiceable');
+
+  const managerLogin=await post('login',{email:identities.get('admin').email,password:`${password}-next`});
+  const manager=sessionCookie(managerLogin);
+  assert.equal((await get(`/club/${org}/finance?branch=${secondBranch}`,manager)).status,404);
+  assert.equal((await endpoint('operation',{command:'finance-payment',request:payment.request},manager,secondBranch)).status,403);
+  const otherActor=await ok(await endpoint('operation',{command:'finance-payment',request:payment.request},manager));
+  assert.equal(otherActor.status,'unconfirmed');
+  assert.equal((await endpoint('payment',{...payment,request:randomUUID()},manager,secondBranch)).status,403);
+});
+
 test('leaving preserves the audit trail and removes club access', async () => {
   const manager=identities.get('admin');
   const login=await post('login',{email:manager.email,password:`${password}-next`});

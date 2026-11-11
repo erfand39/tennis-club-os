@@ -12,10 +12,10 @@ export function database(): pg.Pool {
   return pool;
 }
 
-export async function transaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function transaction<T>(work: (client: PoolClient) => Promise<T>, consistentRead = false): Promise<T> {
   const client = await database().connect();
   try {
-    await client.query('begin');
+    await client.query(consistentRead ? 'begin isolation level repeatable read read only' : 'begin');
     const result = await work(client);
     await client.query('commit');
     return result;
@@ -27,14 +27,14 @@ export async function transaction<T>(work: (client: PoolClient) => Promise<T>): 
   }
 }
 
-export function asUser<T>(userId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
+export function asUser<T>(userId: string, work: (client: PoolClient) => Promise<T>, consistentRead = false): Promise<T> {
   return transaction(async client => {
     await client.query('set local role authenticated');
     await client.query("select set_config('request.jwt.claims', $1, true)", [
       JSON.stringify({ sub: userId, role: 'authenticated' }),
     ]);
     return work(client);
-  });
+  },consistentRead);
 }
 
 export async function isConfigured(): Promise<boolean> {
