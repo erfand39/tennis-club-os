@@ -6,3 +6,6 @@
 /node_modules/
 /supabase/.temp/
 /supabase/.branches/
+/.next/
+/.local/
+/tsconfig.tsbuildinfo

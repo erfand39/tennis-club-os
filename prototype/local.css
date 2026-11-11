@@ -1,0 +1,77 @@
+.local-brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; }
+.sam-mark { display: block; flex: none; width: 46px; height: 46px; background: url('./assets/court-icon.svg') center / cover no-repeat; }
+.local-brand strong, .local-brand small { display: block; }
+.local-brand strong { font-size: 16px; font-weight: 850; }
+.local-brand small { color: var(--muted); font-size: 9px; letter-spacing: 1.2px; font-weight: 740; }
+.access-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(330px, .9fr) minmax(0, 1.1fr); }
+.access-card { align-self: center; width: min(100%, 520px); margin: 0 auto; padding: clamp(22px, 5vw, 64px); }
+.access-image { display: flex; align-items: end; min-width: 0; padding: 44px; color: #f8fff0; background: linear-gradient(0deg,#0a2a21e5, #0c322a10 70%), url('./assets/court-hero.webp') 26% center / cover no-repeat; }
+.access-image strong { font-size: clamp(31px, 4.4vw, 59px); font-weight: 900; }
+.access-image p { margin-top: 4px; font-size: 15px; }
+.access-heading { margin-block: 28px 17px; }
+.access-heading h1, .local-heading h1 { font-weight: 900; line-height: 1.4; font-size: clamp(25px, 3vw, 37px); }
+.access-heading p, .local-heading p, .access-help p, .local-panel p { color: var(--muted); font-size: 13px; line-height: 1.85; }
+.access-help { margin-top: 18px; color: var(--forest); font-size: 13px; }
+.access-help p { margin-top: 8px; }
+.access-help code, .local-form small code { overflow-wrap: anywhere; }
+.local-form { display: grid; gap: 12px; }
+.local-form .field small { color: var(--muted); font-size: 11px; }
+.local-form > button { justify-self: start; }
+.access-card .local-form > button { width: 100%; }
+.local-notice { margin: 0 0 12px; padding: 9px 11px; border-radius: 10px; background: #e8f2e7; color: var(--deep); font-size: 13px; }
+.local-notice.error { color: #882f2e; background: #fff1ef; border: 1px solid #edd2ce; }
+.local-form > .local-notice { margin: 0; }
+.local-shell { display: grid; grid-template-columns: 214px minmax(0, 1fr); min-height: 100dvh; }
+.local-sidebar { background: #fcfdf9; border-inline-end: 1px solid var(--line); display: flex; flex-direction: column; gap: 24px; padding: 20px 14px; }
+.local-sidebar nav { display: grid; gap: 6px; }
+.local-sidebar nav a { color: var(--forest); border-radius: 9px; padding: 10px; font-size: 14px; font-weight: 750; }
+.local-sidebar nav a:hover { background: var(--soft-green); }
+.local-account { margin-block-start: auto; border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 5px; }
+.local-account small { color: var(--muted); }
+.local-content { width: 100%; max-width: 1440px; min-width: 0; padding: 24px clamp(16px, 3vw, 42px) 36px; margin-inline: auto; }
+.local-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; }
+.local-label { display: inline-block; color: var(--forest); background: #eaf2e7; font-size: 11px; font-weight: 750; border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+.local-hero { border-radius: 19px; min-height: 192px; display: flex; align-items: center; padding: 24px; color: #f8fff0; background: linear-gradient(270deg,#08291fea 13%,#0c30242e 75%), url('./assets/court-hero.webp') left center / cover no-repeat; }
+.local-hero h2 { font-size: clamp(26px, 4vw, 40px); font-weight: 900; }
+.local-hero p { color: #f0f8e5; font-size: 13px; }
+.local-panel { padding: 15px; margin-bottom: 12px; }
+.local-panel h2 { font-size: 17px; margin-bottom: 8px; }
+.local-panel > p { margin-bottom: 10px; }
+.local-panel.narrow { max-width: 550px; }
+.local-branches, .member-list { display: grid; padding: 0; list-style: none; margin: 0; }
+.local-branches li { min-height: 50px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+.local-branches li:last-child { border-bottom: 0; }
+.local-branches small { color: var(--muted); }
+.local-branches .local-label { margin-inline-start: auto; }
+.local-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr); gap: 13px; align-items: start; }
+.local-filters { display: flex; align-items: end; gap: 6px; flex-wrap: wrap; padding-bottom: 8px; }
+.local-filters label { flex: 1 1 90px; }
+.member-row { border-top: 1px solid var(--line); }
+.member-row summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 55px; }
+.member-row summary strong, .member-row summary small { display: block; overflow-wrap: anywhere; }
+.member-row summary small { color: var(--muted); font-size: 11px; text-align: right; }
+.member-details { display: grid; gap: 12px; padding: 10px 0 15px; }
+.branch-fields { padding: 6px 9px 9px; border: 1px solid var(--line); border-radius: 8px; margin: 0; }
+.branch-fields legend { font-size: 12px; font-weight: 770; padding-inline: 3px; }
+.branch-fields label { display: flex; min-height: 34px; gap: 5px; align-items: center; font-size: 13px; }
+.branch-fields input { accent-color: var(--forest); }
+.branch-fields small { color: var(--muted); font-size: 11px; }
+.link-result { display: grid; gap: 7px; }
+.link-result button { justify-self: start; }
+@media (max-width: 840px) {
+  .access-shell { grid-template-columns: 1fr; }
+  .access-image { display: none; }
+  .local-shell { grid-template-columns: 1fr; }
+  .local-sidebar { border-inline-end: 0; border-bottom: 1px solid var(--line); padding: 10px 13px; gap: 5px; }
+  .local-sidebar nav { display: flex; flex-wrap: wrap; }
+  .local-account { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+  .local-account form { margin-inline-start: auto; }
+}
+@media (max-width: 630px) {
+  .access-card { padding: 22px 16px; }
+  .access-heading { margin-block-start: 19px; }
+  .local-content { padding: 14px 12px 24px; }
+  .local-grid { grid-template-columns: 1fr; gap: 2px; }
+  .member-row summary { align-items: start; padding-block: 7px; }
+  .local-hero { min-height: 151px; padding: 13px; }
+}

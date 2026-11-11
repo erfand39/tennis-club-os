@@ -646,6 +646,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          access_revision: number
           created_at: string
           currency: string
           id: string
@@ -653,12 +654,14 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          access_revision?: number
           created_at?: string
           currency?: string
           id?: string
           name: string
         }
         Update: {
+          access_revision?: number
           created_at?: string
           currency?: string
           id?: string
@@ -1089,6 +1092,18 @@ export type Database = {
         }
         Returns: string
       }
+      club_members: {
+        Args: { p_org: string }
+        Returns: {
+          active: boolean
+          display_name: string
+          email: string
+          location_ids: string[]
+          person_id: string
+          role: Database["public"]["Enums"]["club_role"]
+          user_id: string
+        }[]
+      }
       create_booking: {
         Args: {
           p_booker_name?: string
@@ -1114,6 +1129,7 @@ export type Database = {
         }
         Returns: string
       }
+      leave_club: { Args: { p_org: string }; Returns: undefined }
       record_payment: {
         Args: {
           p_amount: number
@@ -1163,6 +1179,21 @@ export type Database = {
           p_start: string
         }
         Returns: string
+      }
+      set_club_member: {
+        Args: {
+          p_active: boolean
+          p_locations: string[]
+          p_org: string
+          p_person?: string
+          p_role: Database["public"]["Enums"]["club_role"]
+          p_user: string
+        }
+        Returns: undefined
+      }
+      update_my_profile: {
+        Args: { p_display_name: string }
+        Returns: undefined
       }
     }
     Enums: {

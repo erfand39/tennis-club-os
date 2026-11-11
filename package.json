@@ -2,11 +2,28 @@
   "name": "tennis-club-os",
   "private": true,
   "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3030",
+    "build": "next build --webpack",
+    "start": "next start --hostname 127.0.0.1 --port 3030",
+    "typecheck": "tsc --noEmit",
     "build:preview": "node scripts/build-preview.mjs",
     "test:preview": "node --test scripts/preview.test.mjs",
-    "test:db": "node --test scripts/database.test.mjs"
+    "test:db": "node --test scripts/database.test.mjs",
+    "test:local": "node --test scripts/local.test.mjs"
   },
   "devDependencies": {
-    "pg": "8.23.1"
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@supabase/auth-js": "2.119.0",
+    "next": "16.4.6",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "server-only": "0.0.1"
   }
 }

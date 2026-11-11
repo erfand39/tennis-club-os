@@ -1,0 +1,95 @@
+name: sam-tennis-local
+
+services:
+  db:
+    image: postgres:17.11-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${SAM_DB_PASSWORD:?Run scripts/local.sh up}
+      SAM_AUTH_DB_PASSWORD: ${SAM_AUTH_DB_PASSWORD:?Run scripts/local.sh up}
+      SAM_WEB_DB_PASSWORD: ${SAM_WEB_DB_PASSWORD:?Run scripts/local.sh up}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./local/init-db.sh:/docker-entrypoint-initdb.d/10-sam.sh:ro
+      - ./local/init-db.sql:/opt/sam/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [backend]
+
+  auth:
+    image: supabase/gotrue:v2.189.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      API_EXTERNAL_URL: ${SAM_ORIGIN}
+      GOTRUE_SITE_URL: ${SAM_ORIGIN}
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_NAMESPACE: auth
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${SAM_AUTH_DB_PASSWORD}@db:5432/postgres?search_path=auth
+      GOTRUE_JWT_SECRET: ${SAM_JWT_SECRET}
+      GOTRUE_JWT_EXP: "900"
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_OTP_EXP: "3600"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9999/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [backend]
+
+  migrate:
+    image: sam-tennis-local-app
+    build: .
+    depends_on:
+      auth:
+        condition: service_healthy
+    command: ["node", "scripts/migrate-local.mjs"]
+    environment:
+      DATABASE_URL: postgres://postgres:${SAM_DB_PASSWORD}@db:5432/postgres
+    networks: [backend]
+
+  app:
+    image: sam-tennis-local-app
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      SAM_ORIGIN: ${SAM_ORIGIN}
+      SAM_AUTH_URL: http://auth:9999
+      SAM_DATABASE_URL: postgres://tennis_web:${SAM_WEB_DB_PASSWORD}@db:5432/postgres
+      SAM_JWT_SECRET: ${SAM_JWT_SECRET}
+      SAM_SESSION_KEY: ${SAM_SESSION_KEY}
+      SAM_SETUP_CODE: ${SAM_SETUP_CODE}
+      SAM_PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:${SAM_PORT:-3030}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [default, backend]
+
+networks:
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
+    name: sam-tennis-pgdata-v1
