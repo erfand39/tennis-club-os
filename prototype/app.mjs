@@ -87,7 +87,7 @@ root.innerHTML = `
   <aside class="sidebar">
     <a href="#dashboard" class="brand">
       <img src="./assets/court-icon.svg" width="43" height="43" alt="">
-      <span><strong>باشگاه تنیس</strong><small dir="ltr">TENNIS CLUB OS</small></span>
+      <span><strong>باشگاه تنیس سام</strong><small dir="ltr">TENNIS CLUB OS</small></span>
     </a>
     ${navLinks('side-nav')}
     <div class="sidebar-bottom">
@@ -97,7 +97,7 @@ root.innerHTML = `
   </aside>
   <div class="workspace">
     <header class="topbar">
-      <a href="#dashboard" class="mobile-brand" aria-label="باشگاه تنیس"><img src="./assets/court-icon.svg" width="34" height="34" alt=""></a>
+      <a href="#dashboard" class="mobile-brand" aria-label="باشگاه تنیس سام"><img src="./assets/court-icon.svg" width="34" height="34" alt=""></a>
       <div class="breadcrumbs"><span>پنل باشگاه</span><span class="breadcrumb-arrow">${icon('chevronLeft', 14)}</span><strong id="current-page"></strong></div>
       <span class="branch">${icon('pin', 16)} شعبهٔ مرکزی</span>
       <button class="icon-button mobile-help" aria-label="دربارهٔ نمونهٔ تعاملی" data-action="help">${icon('info')}</button>

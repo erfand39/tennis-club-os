@@ -371,6 +371,7 @@ progress::-moz-progress-bar { background: var(--bar); border-radius: 10px; }
   :root { --sidebar: 178px; }
   .sidebar { padding-inline: 11px; }
   .brand { padding-inline: 4px; }
+  .brand strong { font-size: 14px; }
   .dashboard-columns { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 12px; }
   .schedule-list { padding-inline: 10px; }
   .schedule-head, .schedule-row { padding-inline: 5px; gap: 5px; }

@@ -1,0 +1,11 @@
+project_id = "tennis-club-os"
+
+[api]
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = false

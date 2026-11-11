@@ -1,0 +1,12 @@
+{
+  "name": "tennis-club-os",
+  "private": true,
+  "scripts": {
+    "build:preview": "node scripts/build-preview.mjs",
+    "test:preview": "node --test scripts/preview.test.mjs",
+    "test:db": "node --test scripts/database.test.mjs"
+  },
+  "devDependencies": {
+    "pg": "8.23.1"
+  }
+}
