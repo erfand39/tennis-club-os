@@ -92,6 +92,7 @@ root.innerHTML = `
     </a>
     ${navLinks('side-nav')}
     <div class="sidebar-bottom">
+      <a class="sidebar-help" href="./reports.html">${icon('dashboard',18)} گزارش‌ها</a>
       <a class="sidebar-help" href="./finance.html">${icon('dashboard',18)} امور مالی</a>
       <a class="sidebar-help" href="./manage.html">${icon('people', 18)} مدیریت پرونده‌ها</a>
       <a class="sidebar-help" href="./access.html">${icon('people', 18)} نمونهٔ ورود و دسترسی</a>
@@ -170,7 +171,10 @@ function dashboard() {
   const percent = Math.round(occupied(effective) / (activeCourts.length * (closing - opening)) * 100);
   const lessons = effective.filter(booking => booking.kind !== 'rental').length;
   return `
-    ${pageHeading('نمای کلی باشگاه', longDate(today))}
+    <div class="page-heading">
+      <div><h1>نمای کلی باشگاه</h1><p>${longDate(today)}</p></div>
+      <div class="finance-shortcuts"><a class="button subtle" href="./reports.html">گزارش‌ها</a>${newButton()}</div>
+    </div>
     <section class="hero" aria-labelledby="next-title">
       <div class="hero-content">
         <span class="hero-kicker"><i></i> برنامهٔ امروز</span>
@@ -520,7 +524,7 @@ function help() {
     <footer class="dialog-actions"><button class="button subtle" data-action="reset-prompt">${icon('refresh', 18)} بازنشانی داده‌های نمونه</button>
     <a class="button subtle" href="./access.html">نمونهٔ ورود و دسترسی</a>
     <a class="button subtle" href="./manage.html">مدیریت پرونده‌ها</a>
-    <a class="button subtle" href="./finance.html">امور مالی</a></footer>`);
+    <a class="button subtle" href="./finance.html">امور مالی</a><a class="button subtle" href="./reports.html">گزارش‌ها</a></footer>`);
 }
 
 function complete(message) {

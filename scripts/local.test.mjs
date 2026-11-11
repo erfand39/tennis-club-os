@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
+import { inflateRawSync } from 'node:zlib';
 import pg from 'pg';
 
 const { SAM_TEST_ORIGIN: origin, SAM_TEST_SETUP_CODE: code, SAM_TEST_DATABASE_URL: databaseUrl } = process.env;
@@ -666,6 +667,180 @@ test('coach revenue share snapshots terms and private credits exclude duplicate 
   const calendar=await get(`/club/${org}/calendar/${booking.id}`,owner);
   assert.equal(calendar.status,200);
   assert.match(await calendar.text(),/با اعتبار بسته پوشش داده شده است/);
+});
+
+test('reports reconcile local periods, capacity, attendance, movements and export against source records', async () => {
+  const date='2024-03-20';
+  const next='2024-03-21';
+  const previous='2024-03-19';
+  const {rows:[actor]}=await db.query('select id from auth.users where email=$1',[ownerEmail]);
+  await db.query("update public.locations set timezone='America/New_York' where id=$1",[secondBranch]);
+  const one=async (sql,values)=>(await db.query(sql,values)).rows[0];
+  const court=(await one(`insert into public.courts(organization_id,location_id,name,surface)
+    values ($1,$2,'زمین گزارش مرجع','هارد') returning id`,[org,branch])).id;
+  const otherCourt=(await one(`insert into public.courts(organization_id,location_id,name,surface)
+    values ($1,$2,'زمین خارج از دسترسی گزارش','هارد') returning id`,[org,secondBranch])).id;
+  await db.query(`insert into public.court_operating_hours(organization_id,location_id,court_id,weekday,valid_dates,local_minutes)
+    values ($1,$2,$3,3,'[2024-03-20,2024-03-21)','[0,720)')`,[org,branch,court]);
+  const coach=(await one("insert into public.coach_profiles(organization_id,name) values ($1,'مربی گزارش مرجع') returning id",[org])).id;
+  await db.query(`insert into public.coach_locations(organization_id,location_id,coach_id)
+    values ($1,$2,$3),($1,$4,$3)`,[org,branch,coach,secondBranch]);
+  await db.query(`insert into public.coach_availability(organization_id,location_id,coach_id,weekday,valid_dates,local_minutes)
+    values ($1,$2,$3,3,'[2024-03-20,2024-03-21)','[480,720)')`,[org,branch,coach]);
+  const student=(await one(`insert into public.student_profiles(organization_id,name,skill_level,created_at)
+    values ($1,'شاگرد گزارش مرجع','مقدماتی','2024-03-20 03:00Z') returning id`,[org])).id;
+  const absent=(await one(`insert into public.student_profiles(organization_id,name,created_at)
+    values ($1,'شاگرد غایب مرجع','2024-03-18 03:00Z') returning id`,[org])).id;
+  await db.query('insert into public.student_locations(organization_id,location_id,student_id) values ($1,$2,$3),($1,$2,$4)',[org,branch,student,absent]);
+  await db.query("update public.student_profiles set skill_level='متوسط' where id=$1",[student]);
+  assert.deepEqual(await one('select previous_level,current_level from public.student_level_changes where student_id=$1',[student]),
+    {previous_level:'مقدماتی',current_level:'متوسط'});
+  await db.query("update public.student_level_changes set effective_at='2024-03-20 07:00Z' where student_id=$1",[student]);
+  const block=(table,location,starts,ends,extra)=>db.query(`insert into public.${table}(organization_id,location_id,slot,reason${extra?',court_id':''})
+    values ($1,$2,tstzrange($3,$4,'[)'),'انسداد مرجع'${extra?',$5':''})`,[org,location,starts,ends,...(extra?[extra]:[])]);
+  await block('location_closures',branch,date+'T10:00+03:30',date+'T11:00+03:30');
+  await block('court_maintenance_blocks',branch,date+'T10:30+03:30',date+'T11:30+03:30',court);
+  const booking=async (location,id,from,to,kind='rental',cancelled=false,zone='Asia/Tehran')=>(await one(`
+    insert into public.bookings(organization_id,location_id,court_id,slot,timezone,kind,created_by,booker_name,status,cancelled_at,cancellation_reason)
+    values ($1,$2,$3,tstzrange($4,$5,'[)'),$6,$7::public.booking_kind,$8,case when $7::public.booking_kind='rental' then 'رزرو مرجع' end,
+      case when $9 then 'cancelled' else 'confirmed' end::public.booking_status,
+      case when $9 then $4::timestamptz-interval '1 hour' end,case when $9 then 'لغو آزمایشی' end) returning id`,
+    [org,location,id,from,to,zone,kind,actor.id,cancelled])).id;
+  const lesson=await booking(branch,court,date+'T09:00+03:30',date+'T10:00+03:30','group');
+  const crossing=await booking(branch,court,previous+'T23:30+03:30',date+'T00:30+03:30');
+  const cancelled=await booking(branch,court,date+'T08:00+03:30',date+'T09:00+03:30','rental',true);
+  await booking(secondBranch,otherCourt,date+'T02:00Z',date+'T03:00Z','rental',false,'America/New_York');
+  await booking(secondBranch,otherCourt,date+'T04:00Z',date+'T05:00Z','rental',false,'America/New_York');
+  const session=(await one(`insert into public.sessions(organization_id,location_id,booking_id,coach_id,capacity,status,actual_slot)
+    values ($1,$2,$3,$4,4,'completed','[2024-03-20 05:30Z,2024-03-20 06:20Z)') returning id`,[org,branch,lesson,coach])).id;
+  for (const [id,status] of [[student,'late'],[absent,'absent']]) {
+    const participant=(await one(`insert into public.session_participants(organization_id,location_id,session_id,student_id)
+      values ($1,$2,$3,$4) returning id`,[org,branch,session,id])).id;
+    await db.query('insert into public.attendance_records(organization_id,location_id,participant_id,status,recorded_by) values ($1,$2,$3,$4,$5)',
+      [org,branch,participant,status,actor.id]);
+  }
+  const invoice=(await one(`insert into public.invoices(organization_id,location_id,currency,total_amount_minor,issued_by,issued_at)
+    values ($1,$2,'IRR',2000,$3,'2024-03-20 05:00Z') returning id`,[org,branch,actor.id])).id;
+  await db.query('insert into public.invoice_items(organization_id,location_id,invoice_id,booking_id,amount_minor) values ($1,$2,$3,$4,2000)',
+    [org,branch,invoice,lesson]);
+  const receipt=(await one(`insert into public.payments(organization_id,location_id,invoice_id,method,amount_minor,received_by,effective_at)
+    values ($1,$2,$3,'cash',1000,$4,'2024-03-20 10:00Z') returning id`,[org,branch,invoice,actor.id])).id;
+  await db.query(`insert into public.refunds(organization_id,location_id,payment_id,amount_minor,reason,recorded_by,effective_at)
+    values ($1,$2,$3,300,'آزمون مرزی',$4,'2024-03-20 20:30Z')`,[org,branch,receipt,actor.id]);
+  const packageId=(await one(`insert into public.training_packages(organization_id,location_id,student_id,title,sessions,valid_from,valid_until,created_at)
+    values ($1,$2,$3,'=بسته مرجع',8,'2024-03-20','2024-04-20','2024-03-20 05:30Z') returning id`,[org,branch,student])).id;
+  const packInvoice=(await one(`insert into public.invoices(organization_id,location_id,currency,total_amount_minor,issued_by,issued_at)
+    values ($1,$2,'IRR',500,$3,'2024-03-20 05:00Z') returning id`,[org,branch,actor.id])).id;
+  await db.query('insert into public.invoice_items(organization_id,location_id,invoice_id,package_id,amount_minor) values ($1,$2,$3,$4,500)',
+    [org,branch,packInvoice,packageId]);
+  await db.query(`insert into public.payments(organization_id,location_id,invoice_id,method,amount_minor,received_by,effective_at)
+    values ($1,$2,$3,'cash',450,$4,'2024-03-20 10:00Z')`,[org,branch,packInvoice,actor.id]);
+  await db.query(`insert into public.club_expenses(organization_id,location_id,title,category,currency,amount_minor,method,effective_on,created_by)
+    values ($1,$2,'هزینه مرجع','equipment','IRR',150,'card','2024-03-20',$3)`,[org,branch,actor.id]);
+
+  const path=(filters={},file=false)=>`/club/${org}/reports${file?'/excel':''}?`+new URLSearchParams({
+    period:'day',anchor:date,branch,...filters,
+  });
+  const read=async (filters={},cookie=owner)=>{
+    const response=await get(path(filters),cookie);
+    const html=await response.text();
+    assert.equal(response.status,200,html.slice(0,500));
+    assert.doesNotMatch(html,/Application error|NEXT_HTTP_ERROR_FALLBACK;500/);
+    return html.replaceAll('<!-- -->','').replaceAll('\u200e','');
+  };
+  const metric=(html,label,value)=>{
+    const start=html.indexOf('>'+label+'</span><strong>');
+    assert.notEqual(start,-1,label);
+    assert.ok(html.slice(start,start+250).startsWith('>'+label+'</span><strong>'+value+'</strong>'),html.slice(start,start+250));
+  };
+  const report=await read({scope:'court',entity:court,compare:'1',detail:'capacity'});
+  metric(report,'رزروهای معتبر','۱');
+  metric(report,'زمان رزروشده','۱٫۵ ساعت');
+  metric(report,'ظرفیت قابل استفاده','۱۰٫۵ ساعت');
+  metric(report,'نرخ اشغال رزروشده','۱۴٫۳٪');
+  metric(report,'استفادهٔ واقعی ثبت‌شده','۰٫۸۳ ساعت');
+  metric(report,'تعطیلی و تعمیرات','۱٫۵ ساعت');
+  metric(report,'نرخ حضور','۵۰٪');
+  metric(report,'دریافتی خالص منتسب','۱٬۰۰۰ ریال');
+  metric(report,'ماندهٔ فاکتور در پایان دوره','۱٬۰۰۰ ریال');
+  assert.match(report,/<td>630<\/td><td>90<\/td><td>50<\/td><td>90<\/td>/);
+  assert.match(report,/۱۴۰۳\/۰۱\/۰۱/);
+  const traced=await read({scope:'court',entity:court,detail:'bookings'});
+  for (const id of [lesson,crossing,cancelled]) assert.ok(traced.includes('/calendar/'+id));
+  assert.match(traced,/لغوشده/);
+  const followup=await read({scope:'court',entity:court,anchor:next,detail:'money'});
+  metric(followup,'دریافتی خالص منتسب','−۳۰۰ ریال');
+  metric(followup,'ماندهٔ فاکتور در پایان دوره','۱٬۳۰۰ ریال');
+  assert.ok(followup.includes('/finance/'+invoice));
+  const total=await read({branch:''});
+  metric(total,'رزروهای معتبر','۲');
+  metric(total,'دریافتی خالص','۱٬۴۵۰ ریال');
+  metric(total,'پرونده‌های جدید شاگردان','۱');
+  metric(total,'هزینه‌های ثبت‌شده','۱۵۰ ریال');
+  const teacher=await read({scope:'coach',entity:coach,detail:'attendance'});
+  metric(teacher,'زمان واقعی تدریس','۰٫۸۳ ساعت');
+  metric(teacher,'ظرفیت کاری مربی','۳ ساعت');
+  metric(teacher,'استفاده از ظرفیت کاری','۲۷٫۸٪');
+  assert.ok(teacher.includes('/classes/'+session));
+  const hours=await read({scope:'coach',entity:coach,detail:'coach-time'});
+  assert.match(hours,/<td>تدریس در ساعات کاری<\/td><td>[^<]+<\/td><td>[^<]+<\/td><td>50<\/td>/);
+  const pupil=await read({scope:'student',entity:student,detail:'levels'});
+  metric(pupil,'نرخ حضور','۱۰۰٪');
+  metric(pupil,'دریافتی خالص منتسب','۴۵۰ ریال');
+  assert.match(pupil,/<td>مقدماتی<\/td><td>متوسط<\/td>/);
+  const roster=await read({scope:'student',entity:student,detail:'attendance'});
+  assert.ok(roster.includes('<td>شاگرد گزارش مرجع</td>'));
+  assert.ok(!roster.includes('<td>شاگرد غایب مرجع</td>'));
+  const month=await read({scope:'court',entity:court,period:'month',anchor:'2024-03-24',compare:'1'});
+  assert.match(month,/۱۴۰۳\/۰۱\/۰۱ تا ۱۴۰۳\/۰۱\/۳۱/);
+  const year=await read({scope:'court',entity:court,period:'year',anchor:'2024-12-01',compare:'1'});
+  assert.match(year,/۱۴۰۳\/۰۱\/۰۱ تا ۱۴۰۳\/۱۲\/۳۰/);
+  const week=await read({scope:'court',entity:court,period:'week'});
+  assert.match(week,/۱۴۰۲\/۱۲\/۲۶ تا ۱۴۰۳\/۰۱\/۰۳/);
+  const custom=await read({scope:'court',entity:court,period:'custom',from:date,to:next});
+  metric(custom,'دریافتی خالص منتسب','۷۰۰ ریال');
+  assert.match(await read({anchor:'2005-01-01',scope:'court',entity:court}),/داده‌ای برای بازهٔ انتخاب‌شده پیدا نشد/);
+  assert.match(await read({period:'custom',from:next,to:date}),/ترتیب تاریخ‌ها و طول بازه را بررسی کنید/);
+  const login=await post('login',{email:identities.get('admin').email,password:`${password}-next`});
+  const manager=sessionCookie(login);
+  assert.doesNotMatch(await read({branch:''},manager),/شعبهٔ دوم آزمایشی|زمین خارج از دسترسی گزارش/);
+  assert.equal((await get(path({branch:secondBranch}),manager)).status,404);
+  assert.equal((await get(path({branch:'',scope:'court',entity:otherCourt},true),manager)).status,404);
+  assert.equal((await get(path({},true))).status,307);
+
+  const exportResponse=await get(path({scope:'student',entity:student,compare:'1'},true),owner);
+  assert.equal(exportResponse.status,200);
+  assert.match(exportResponse.headers.get('content-type'),/spreadsheetml/);
+  assert.match(exportResponse.headers.get('content-disposition'),/sam-report-student-2024-03-20-2024-03-20.xlsx/);
+  const archive=Buffer.from(await exportResponse.arrayBuffer());
+  let offset=0;
+  const parts=new Map();
+  while (archive.readUInt32LE(offset)===0x04034b50) {
+    const size=archive.readUInt32LE(offset+18);
+    const nameLength=archive.readUInt16LE(offset+26);
+    const start=offset+30+nameLength+archive.readUInt16LE(offset+28);
+    const name=archive.subarray(offset+30,offset+30+nameLength).toString();
+    parts.set(name,inflateRawSync(archive.subarray(start,start+size)).toString());
+    offset=start+size;
+  }
+  assert.match(parts.get('xl/workbook.xml'),/ریز گردش و ماندهٔ مالی/);
+  assert.match(parts.get('xl/worksheets/sheet2.xml'),/دوره قبل/);
+  const xml=[...parts.values()].join('');
+  assert.ok(!xml.includes(receipt));
+  assert.match(xml,/دریافتی خالص منتسب/);
+  assert.match(xml,/<v>450<\/v>/);
+  assert.match(xml,/<t xml:space="preserve">=بسته مرجع<\/t>/);
+  assert.doesNotMatch(xml,/<f[ >]/);
+
+  await db.query(`update public.courts set status='inactive' where id=$1`,[court]);
+  await db.query(`insert into tennis_private.resource_changes
+    (organization_id,kind,resource_id,actor_id,request_id,payload_hash,action,previous_status,current_status,branch_ids,occurred_at)
+    values ($1,'court',$2,$3,$4,sha256('test'::bytea),'edited','active','inactive',array[$5::uuid],'2024-03-20 05:30Z')`,
+    [org,court,actor.id,randomUUID(),branch]);
+  const archived=await read({scope:'court',entity:court,detail:'capacity'});
+  metric(archived,'ظرفیت قابل استفاده','۹ ساعت');
+  metric(archived,'خارج از بهره‌برداری','۳ ساعت');
+  metric(archived,'نرخ اشغال رزروشده','۵٫۶٪');
 });
 
 test('leaving preserves the audit trail and removes club access', async () => {

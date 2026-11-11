@@ -1288,6 +1288,42 @@ export type Database = {
           },
         ]
       }
+      student_level_changes: {
+        Row: {
+          current_level: string | null
+          effective_at: string
+          id: string
+          organization_id: string
+          previous_level: string | null
+          student_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          current_level?: string | null
+          effective_at?: string
+          id?: string
+          organization_id: string
+          previous_level?: string | null
+          student_id: string
+        }
+        Update: {
+          current_level?: string | null
+          effective_at?: string
+          id?: string
+          organization_id?: string
+          previous_level?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_level_changes_organization_id_student_id_fkey"
+            columns: ["organization_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       student_locations: {
         Row: {
           active: boolean
