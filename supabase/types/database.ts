@@ -140,6 +140,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["booking_kind"]
           location_id: string
           organization_id: string
+          revision: number
           slot: unknown
           starts_at: string | null
           status: Database["public"]["Enums"]["booking_status"]
@@ -158,6 +159,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["booking_kind"]
           location_id: string
           organization_id: string
+          revision?: number
           slot: unknown
           starts_at?: never
           status?: Database["public"]["Enums"]["booking_status"]
@@ -175,6 +177,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["booking_kind"]
           location_id?: string
           organization_id?: string
+          revision?: number
           slot?: unknown
           starts_at?: never
           status?: Database["public"]["Enums"]["booking_status"]
@@ -1177,6 +1180,15 @@ export type Database = {
         }
         Returns: string
       }
+      calendar_booking_history: {
+        Args: { p_booking: string; p_location: string; p_org: string }
+        Returns: {
+          action: string
+          created_at: string
+          new_start: string
+          old_start: string
+        }[]
+      }
       cancel_booking: {
         Args: {
           p_booking: string
@@ -1223,6 +1235,18 @@ export type Database = {
           p_request: string
           p_start: string
           p_student?: string
+        }
+        Returns: string
+      }
+      edit_calendar_booking: {
+        Args: {
+          p_booking: string
+          p_location: string
+          p_org: string
+          p_reason: string
+          p_request: string
+          p_revision: number
+          p_start: string
         }
         Returns: string
       }

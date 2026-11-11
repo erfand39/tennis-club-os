@@ -158,3 +158,59 @@
 @media (max-width: 360px) {
   .resource-filters { grid-template-columns: 1fr; }
 }
+
+.calendar-controls, .calendar-toolbar, .calendar-section-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.calendar-filter { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; min-width: 0; }
+.calendar-filter .field { min-width: 135px; flex: 1; }
+.calendar-filter button { flex: none; }
+.calendar-tabs, .calendar-arrows { display: flex; align-items: center; gap: 4px; }
+.calendar-tabs [aria-current] { background: var(--soft-green); border-color: #bcd3b7; color: var(--forest); }
+.calendar-arrow { width: 43px; font-size: 22px; }
+.calendar-period h2 { margin-block: 12px 4px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 5px; margin-top: 10px; }
+.calendar-day {
+  display: grid; justify-items: center; align-content: center; min-width: 0; min-height: 72px;
+  gap: 3px; padding: 5px 2px; border: 1px solid var(--line); border-radius: 9px;
+  background: #f8faf5; color: var(--forest);
+}
+.calendar-grid.is-month .calendar-day { min-height: 55px; }
+.calendar-day[aria-current] { background: var(--soft-green); border-color: #9bbb96; }
+.calendar-day:hover { border-color: var(--forest); }
+.calendar-day small, .calendar-weeklabel { color: var(--muted); font-size: 11px; text-align: center; }
+.calendar-count { min-width: 22px; padding: 2px 4px; border-radius: 8px; font-size: 11px; text-align: center; color: var(--muted); }
+.calendar-count.has-bookings { background: #dfead9; color: var(--deep); font-weight: 800; }
+.calendar-section-title h2 { margin: 0; }
+.calendar-section-title small, .calendar-court > small { color: var(--muted); font-size: 12px; }
+.calendar-section-title { margin-bottom: 9px; }
+.calendar-courts { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,210px),1fr)); gap: 9px; }
+.calendar-court { padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: #f8faf5; min-width: 0; }
+.calendar-court h3 { font-size: 15px; }
+.calendar-court p { margin-top: 8px; }
+.calendar-windows { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.calendar-windows a { display: inline-flex; align-items: center; padding: 6px 9px; min-height: 44px; border: 1px solid #bcd3b7; border-radius: 8px; color: var(--forest); background: #e9f4e7; }
+.calendar-windows a:hover { background: #dcebd6; }
+.calendar-time { white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.calendar-row { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 9px 5px; min-height: 54px; font-size: 13px; }
+.calendar-row:hover { background: #f3f7ef; }
+.calendar-row > span { min-width: 0; overflow-wrap: anywhere; }
+.calendar-row small { display: block; color: var(--muted); font-size: 11px; }
+.calendar-detail { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); gap: 12px; align-items: start; }
+.calendar-booking-form { max-width: 680px; }
+.calendar-inputs { margin: 0; padding: 0; border: 0; min-width: 0; }
+.calendar-quote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-radius: 10px; padding: 9px 12px; background: #e8f2e7; color: var(--deep); font-size: 13px; }
+.local-hero .hero-link { margin-inline-end: 10px; }
+@media (max-width: 630px) {
+  .calendar-controls, .calendar-filter { display: grid; grid-template-columns: 1fr; }
+  .calendar-filter { grid-template-columns: minmax(0,1fr) auto; }
+  .calendar-filter:last-child { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .calendar-filter:last-child button { grid-column: 1/-1; justify-self: start; }
+  .calendar-filter .field { min-width: 0; }
+  .calendar-tabs .button, .calendar-arrows .button { padding-inline: 7px; }
+  .calendar-arrow { width: 36px; }
+  .calendar-grid { gap: 3px; }
+  .calendar-day { font-size: 12px; }
+  .calendar-day small, .calendar-count { font-size: 10px; }
+  .calendar-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .calendar-row .resource-status { grid-column: 2; }
+  .calendar-detail, .calendar-inputs { grid-template-columns: 1fr; }
+}

@@ -380,24 +380,24 @@ function reserveForm(prefill = {}, previous = null) {
   const dates = Array.from({ length: 60 }, (_, index) => addDays(today, index));
   if (!dates.includes(date)) dates.push(date);
   const times = Array.from({ length: (closing - opening) / 30 }, (_, index) => opening + index * 30);
-  showDialog(previous ? 'ویرایش سانس' : 'رزرو سانس', 'جزئیات سانس و زمان شروع را انتخاب کنید.', `
+  showDialog(previous ? 'جابه‌جایی سانس' : 'رزرو سانس', previous ? 'زمین، مدت و مبلغ سانس حفظ می‌شوند.' : 'جزئیات سانس و زمان شروع را انتخاب کنید.', `
     <form id="booking-form" novalidate data-id="${escape(previous?.id ?? '')}">
       <div class="form-grid">
         <label class="field"><span>تاریخ</span><select name="date">${options(dates.map(day => [day, longDate(day)]), date)}</select></label>
-        <label class="field"><span>زمین</span><select name="court">${options(activeCourts.map(item => [item.id, `${item.name} · ${item.surface}`]), court)}</select></label>
+        <label class="field"><span>زمین</span><select name="court" ${previous ? 'disabled' : ''}>${options(activeCourts.map(item => [item.id, `${item.name} · ${item.surface}`]), court)}</select></label>
         <label class="field"><span>ساعت شروع</span><select name="start">${options(times.map(value => [value, time(value)]), start)}</select></label>
-        <label class="field"><span>مدت</span><select name="duration">${options(durations.map(value => [value, `${number(value)} دقیقه`]), duration)}</select></label>
-        <label class="field wide"><span>نوع سانس</span><select name="kind">${options(Object.entries(kinds), kind)}</select></label>
+        <label class="field"><span>مدت</span><select name="duration" ${previous ? 'disabled' : ''}>${options(durations.map(value => [value, `${number(value)} دقیقه`]), duration)}</select></label>
+        <label class="field wide"><span>نوع سانس</span><select name="kind" ${previous ? 'disabled' : ''}>${options(Object.entries(kinds), kind)}</select></label>
         <label id="rental-field" class="field wide"><span>نام رزروکننده</span>
-          <input name="name" placeholder="مثلاً نادر کریمی" maxlength="50" autocomplete="off" value="${escape(previous?.name ?? '')}"></label>
+          <input name="name" ${previous ? 'disabled' : ''} placeholder="مثلاً نادر کریمی" maxlength="50" autocomplete="off" value="${escape(previous?.name ?? '')}"></label>
         <div id="lesson-fields" class="form-grid wide" hidden>
-          <label class="field"><span>مربی</span><select name="coach">${options([['', 'انتخاب مربی'], ...coaches.filter(item => item.active).map(item => [item.id, item.name])], previous?.coach ?? '')}</select></label>
-          <label class="field"><span>شاگرد</span><select name="student">${options([['', 'انتخاب شاگرد'], ...students.filter(item => item.active).map(item => [item.id, item.name])], previous?.student ?? '')}</select></label>
+          <label class="field"><span>مربی</span><select name="coach" ${previous ? 'disabled' : ''}>${options([['', 'انتخاب مربی'], ...coaches.filter(item => item.active).map(item => [item.id, item.name])], previous?.coach ?? '')}</select></label>
+          <label class="field"><span>شاگرد</span><select name="student" ${previous ? 'disabled' : ''}>${options([['', 'انتخاب شاگرد'], ...students.filter(item => item.active).map(item => [item.id, item.name])], previous?.student ?? '')}</select></label>
         </div>
       </div>
       <p id="booking-error" class="form-error" role="alert" hidden></p>
       <div id="booking-estimate" class="estimate"></div>
-      <footer class="dialog-actions"><button type="submit" class="button primary">${icon('check', 18)} ${previous ? 'ذخیرهٔ تغییرات' : 'ثبت سانس آزمایشی'}</button>
+      <footer class="dialog-actions"><button type="submit" class="button primary">${icon('check', 18)} ${previous ? 'ثبت جابه‌جایی' : 'ثبت سانس آزمایشی'}</button>
         <button type="button" class="button subtle" data-action="close-dialog">انصراف</button></footer>
     </form>`);
   updateForm(dialog.querySelector('#booking-form'));
@@ -408,9 +408,9 @@ function updateForm(form) {
   const rental = kind.value === 'rental';
   form.querySelector('#rental-field').hidden = !rental;
   form.querySelector('#lesson-fields').hidden = rental;
-  name.disabled = !rental;
-  coach.disabled = rental;
-  student.disabled = rental;
+  name.disabled = !rental || Boolean(form.dataset.id);
+  coach.disabled = rental || Boolean(form.dataset.id);
+  student.disabled = rental || Boolean(form.dataset.id);
 
   const courtFees = { one: 180000, two: 210000, three: 210000 };
   const lessonFees = { rental: 0, private: 160000, group: 80000 };
@@ -433,9 +433,10 @@ function detail(booking) {
       <div><dt>${booking.kind === 'rental' ? 'رزروکننده' : 'شاگرد'}</dt><dd>${escape(bookingName(booking))}</dd></div>
       ${coach ? `<div><dt>مربی</dt><dd>${coach.name}</dd></div>` : ''}
       <div><dt>وضعیت</dt><dd>${statusBadge(booking.status)}</dd></div>
+      ${booking.reason ? `<div><dt>علت لغو</dt><dd>${escape(booking.reason)}</dd></div>` : ''}
     </dl>
     <footer class="dialog-actions">${editable ? `
-      <button class="button primary" data-action="edit" data-id="${escape(booking.id)}">${icon('edit', 17)} ویرایش سانس</button>
+      <button class="button primary" data-action="edit" data-id="${escape(booking.id)}">${icon('edit', 17)} جابه‌جایی سانس</button>
       <button class="button danger-quiet" data-action="cancel-prompt" data-id="${escape(booking.id)}">لغو سانس</button>`
       : '<button class="button subtle" data-action="close-dialog">بستن</button>'}
     </footer>`);
@@ -444,8 +445,12 @@ function detail(booking) {
 function cancelPrompt(booking) {
   showDialog('لغو این سانس؟', '', `
     <p class="dialog-copy">بازهٔ ${timeRange(booking)} آزاد می‌شود و این سانس با وضعیت «لغوشده» در فهرست باقی می‌ماند.</p>
-    <footer class="dialog-actions"><button class="button danger" data-action="cancel-booking" data-id="${escape(booking.id)}">تأیید لغو</button>
-    <button class="button subtle" data-action="detail" data-id="${escape(booking.id)}">بازگشت</button></footer>`);
+    <form id="cancel-form" data-id="${escape(booking.id)}">
+      <label class="field"><span>علت لغو</span><input name="reason" maxlength="250" required></label>
+      <p class="form-error" id="booking-error" role="alert" hidden></p>
+      <footer class="dialog-actions"><button class="button danger" type="submit">تأیید لغو</button>
+      <button class="button subtle" type="button" data-action="detail" data-id="${escape(booking.id)}">بازگشت</button></footer>
+    </form>`);
 }
 
 function help() {
@@ -486,6 +491,17 @@ function formError(form, { field, message }) {
 
 dialog.addEventListener('submit', event => {
   const form = event.target;
+  if (form.id === 'cancel-form') {
+    event.preventDefault();
+    const reason = String(new FormData(form).get('reason') ?? '').trim();
+    if (!reason || reason.length>250) {
+      formError(form,{field:'reason',message:'علت لغو را وارد کنید.'});
+      return;
+    }
+    bookings = bookings.map(item => item.id === form.dataset.id && item.status === 'confirmed' ? { ...item, status:'cancelled', reason } : item);
+    complete('سانس لغو شد و بازه آزاد است.');
+    return;
+  }
   if (form.id !== 'booking-form') return;
   event.preventDefault();
   clearError(form);
@@ -500,7 +516,7 @@ dialog.addEventListener('submit', event => {
     formError(form, { message: 'ظرفیت دادهٔ آزمایشی پر است. نمونه را از بخش راهنما بازنشانی کنید.' });
     return;
   }
-  const draft = {
+  const draft = previous ? { ...previous,date:values.get('date'),start:Number(values.get('start')) } : {
     id: id || crypto.randomUUID(),
     status: 'confirmed',
     date: values.get('date'),
@@ -522,7 +538,7 @@ dialog.addEventListener('submit', event => {
     state.date = draft.date;
     if (state.court !== 'all') state.court = draft.court;
   }
-  complete(previous ? 'تغییرات سانس ذخیره شد.' : 'سانس آزمایشی ثبت شد.');
+  complete(previous ? 'سانس جابه‌جا شد.' : 'سانس آزمایشی ثبت شد.');
 });
 
 dialog.addEventListener('input', event => {
@@ -554,11 +570,6 @@ const actions = {
   edit: (_, booking) => { if (booking?.status === 'confirmed') reserveForm({}, booking); },
   'close-dialog': () => dialog.close(),
   'cancel-prompt': (_, booking) => { if (booking?.status === 'confirmed') cancelPrompt(booking); },
-  'cancel-booking': (_, booking) => {
-    if (booking?.status !== 'confirmed') return;
-    bookings = bookings.map(item => item.id === booking.id ? { ...item, status: 'cancelled' } : item);
-    complete('سانس لغو شد و بازه آزاد است.');
-  },
   help,
   'reset-prompt': () => showDialog('بازنشانی داده‌های نمونه؟', '', `
     <p class="dialog-copy">تمام تغییرات آزمایشی این مرورگر پاک می‌شوند و برنامهٔ اولیه برمی‌گردد.</p>

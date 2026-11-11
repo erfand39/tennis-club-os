@@ -197,6 +197,127 @@ test('management screens create, filter, edit and archive local records', async 
   assert.equal((await get(other,sessionCookie(managerLogin))).status,404);
 });
 
+test('local calendar, price review and concurrent reservation use persisted branch data', async () => {
+  const day=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
+  const weekday=new Date(day+'T00:00Z').getUTCDay()||7;
+  const {rows:courts}=await db.query(`
+    insert into public.courts (organization_id,location_id,name,surface)
+    values ($1,$2,'زمین زمان‌بندی یک','خاک رس'),($1,$2,'زمین زمان‌بندی دو','خاک رس'),($1,$2,'زمین زمان‌بندی سه','خاک رس')
+    returning id,name
+  `,[org,branch]);
+  for (const {id} of courts) {
+    await db.query(`insert into public.court_operating_hours (organization_id,location_id,court_id,weekday,valid_dates,local_minutes)
+      values ($1,$2,$3,$4,daterange($5,null,'[)'),'[480,1320)')`,[org,branch,id,weekday,day]);
+    await db.query(`insert into public.pricing_rules (organization_id,location_id,court_id,kind,effective,unit_minutes,amount_minor)
+      select $1,$2,$3,k,tstzrange(($4::date::timestamp at time zone 'Asia/Tehran'),null,'[)'),60,1500000
+      from unnest(array['rental','private','group']::public.booking_kind[]) k`,[org,branch,id,day]);
+  }
+  const setup=(court,values={})=>({org,branch,court,start:day+'T10:00',minutes:'۶۰',kind:'rental',booker:'رزروکنندهٔ آزمایشی',request:randomUUID(),...values});
+  const cmd=(action,fields,cookie=owner)=>post('booking-'+action,fields,cookie);
+  const ok=async response=>{
+    const data=await response.json();
+    assert.equal(response.status,200,JSON.stringify(data));
+    return data;
+  };
+  const calendar=`/club/${org}/calendar?branch=${branch}&date=${day}`;
+  const sample=setup(courts[0].id);
+  assert.equal((await get(`/club/${org}/calendar?court=bad`,owner)).status,404);
+  assert.equal((await get(`/club/${org}/calendar/new?branch=${branch}&date=${day}`,owner)).status,200);
+  const page=await get(calendar,owner);
+  assert.equal(page.status,200);
+  assert.match(await page.text(),/زمان‌های آزاد زمین/);
+  const block=await post('resource-block',{org,request:randomUUID(),location:branch,kind:'courts',id:courts[0].id,
+    starts_at:day+'T15:00',ends_at:day+'T16:00',reason:'تعمیرات در تقویم'},owner);
+  assert.equal(block.status,200);
+  await db.query(`insert into public.location_closures (organization_id,location_id,slot,reason)
+    values ($1,$2,tstzrange($3::timestamp at time zone 'Asia/Tehran',$4::timestamp at time zone 'Asia/Tehran','[)'),
+      'تعطیلی در تقویم')`,[org,branch,day+'T17:00',day+'T18:00']);
+  const courtView=await get(calendar+'&court='+courts[0].id,owner);
+  assert.equal(courtView.status,200);
+  const free=(await courtView.text()).replaceAll('<!-- -->','');
+  assert.match(free,/08:00–15:00/);
+  assert.match(free,/16:00–17:00/);
+  assert.match(free,/18:00–22:00/);
+  const {price}=await ok(await cmd('quote',sample));
+  assert.deepEqual(price,{amount:'1500000',currency:'IRR'});
+  const duringClosure=await cmd('create',{...sample,start:day+'T17:00',...price});
+  assert.equal(duringClosure.status,409);
+  assert.equal((await duringClosure.json()).error,'booking-closure');
+  const wrong=await cmd('create',{...sample,amount:'1400000',currency:'IRR'});
+  assert.equal(wrong.status,409);
+  assert.equal((await wrong.json()).error,'booking-price-changed');
+  assert.equal((await db.query('select 1 from public.bookings where court_id=$1',[courts[0].id])).rowCount,0);
+
+  const attempts=await Promise.all([cmd('create',{...sample,...price}),cmd('create',{...sample,...price,request:randomUUID()})]);
+  assert.deepEqual(attempts.map(response=>response.status).sort(),[200,409]);
+  const winner=attempts.findIndex(response=>response.ok);
+  const {next}=await ok(attempts[winner]);
+  const busy=await attempts[1-winner].json();
+  assert.equal(busy.error,'booking-court-conflict');
+  const booking=next.split('?')[0].split('/').at(-1);
+  const reference=await db.query('select starts_at,status from public.bookings where id=$1',[booking]);
+  assert.equal(reference.rows[0].starts_at.toISOString(),day+'T06:30:00.000Z');
+  const replayDraft=setup(courts[0].id,{start:day+'T11:00',...price});
+  const first=await ok(await cmd('create',replayDraft));
+  assert.deepEqual(await ok(await cmd('create',replayDraft)),first);
+
+  for (const view of ['day','week','month']) {
+    const response=await get(calendar+'&view='+view,owner);
+    assert.equal(response.status,200,view);
+    assert.match(await response.text(),/رزروکنندهٔ آزمایشی/);
+  }
+  const wrongMove=await cmd('move',{org,branch,booking,revision:'0',start:day+'T11:00',request:randomUUID()});
+  assert.equal(wrongMove.status,409);
+  assert.equal((await wrongMove.json()).error,'booking-court-conflict');
+  assert.deepEqual((await db.query('select starts_at,status from public.bookings where id=$1',[booking])).rows,reference.rows);
+  const move={org,branch,booking,revision:'0',start:day+'T12:00',request:randomUUID()};
+  const moved=await ok(await cmd('move',move));
+  assert.deepEqual(await ok(await cmd('move',move)),moved);
+  const cancel={org,branch,booking,reason:'لغو آزمایشی مدیر',request:randomUUID()};
+  const stale=await cmd('cancel',{...cancel,revision:'0'});
+  assert.equal(stale.status,409);
+  assert.equal((await stale.json()).error,'booking-stale');
+  assert.equal((await cmd('cancel',{...cancel,revision:'1',reason:''})).status,400);
+  const cancelled=await ok(await cmd('cancel',{...cancel,revision:'1'}));
+  assert.deepEqual(await ok(await cmd('cancel',{...cancel,revision:'1'})),cancelled);
+  const detail=await get(next,owner);
+  assert.equal(detail.status,200);
+  const rendered=await detail.text();
+  for (const label of ['تاریخچهٔ سانس','لغو آزمایشی مدیر','۱٬۵۰۰٬۰۰۰ ریال','جابه‌جایی سانس']) assert(rendered.includes(label),label);
+  assert.equal((await db.query('select status,revision from public.bookings where id=$1',[booking])).rows[0].revision,'2');
+  await ok(await cmd('create',setup(courts[0].id,{start:day+'T12:00',...price})));
+
+  const managerLogin=await post('login',{email:identities.get('admin').email,password:`${password}-next`});
+  const manager=sessionCookie(managerLogin);
+  assert.equal((await get(`/club/${org}/calendar?branch=${secondBranch}`,manager)).status,404);
+  assert.equal((await cmd('quote',{...sample,branch:secondBranch},manager)).status,403);
+  assert.equal((await get(next)).status,307);
+
+  const {rows:coaches}=await db.query(`insert into public.coach_profiles (organization_id,name)
+    values ($1,'مربی تقویم یک'),($1,'مربی تقویم دو') returning id`,[org]);
+  for (const {id} of coaches) {
+    await db.query('insert into public.coach_locations (organization_id,location_id,coach_id) values ($1,$2,$3)',[org,branch,id]);
+    await db.query(`insert into public.coach_availability (organization_id,location_id,coach_id,weekday,valid_dates,local_minutes)
+      values ($1,$2,$3,$4,daterange($5,null,'[)'),'[480,1320)')`,[org,branch,id,weekday,day]);
+  }
+  const {rows:[student]}=await db.query("insert into public.student_profiles (organization_id,name) values ($1,'شاگرد تقویم') returning id",[org]);
+  await db.query('insert into public.student_locations (organization_id,location_id,student_id) values ($1,$2,$3)',[org,branch,student.id]);
+  const lesson=setup(courts[1].id,{...price,kind:'private',booker:'',coach:coaches[0].id,student:student.id});
+  const lessonResult=await ok(await cmd('create',lesson));
+  assert.match(await (await get(lessonResult.next,owner)).text(),/شاگرد تقویم/);
+  const anotherCourt={...lesson,court:courts[2].id,request:randomUUID()};
+  const coachBusy=await cmd('create',anotherCourt);
+  assert.equal(coachBusy.status,409);
+  assert.equal((await coachBusy.json()).error,'booking-coach-conflict');
+  const studentBusy=await cmd('create',{...anotherCourt,coach:coaches[1].id});
+  assert.equal(studentBusy.status,409);
+  assert.equal((await studentBusy.json()).error,'booking-student-conflict');
+  const group=setup(courts[2].id,{...price,kind:'group',booker:'',coach:coaches[1].id,capacity:'۸'});
+  const groupPage=await get((await ok(await cmd('create',group))).next,owner);
+  assert.equal(groupPage.status,200);
+  assert.match((await groupPage.text()).replaceAll('<!-- -->',''),/۸ نفر/);
+});
+
 test('leaving preserves the audit trail and removes club access', async () => {
   const manager=identities.get('admin');
   const login=await post('login',{email:manager.email,password:`${password}-next`});

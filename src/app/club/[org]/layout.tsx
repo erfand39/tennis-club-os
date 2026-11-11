@@ -21,6 +21,7 @@ export default async function ClubLayout({ children, params }: { children: React
       <Brand href={`/club/${org}`} />
       <ClubNav links={[
         { href: `/club/${org}`, label: 'نمای کلی' },
+        { href: `/club/${org}/calendar`, label: 'تقویم سانس‌ها' },
         { href: resourcePath(org,'courts'), label: 'زمین‌ها' },
         { href: resourcePath(org,'coaches'), label: 'مربیان' },
         { href: resourcePath(org,'students'), label: 'شاگردان' },

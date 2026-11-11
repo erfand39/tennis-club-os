@@ -208,6 +208,7 @@ export function storedBookings(value) {
         !durations.includes(row.duration) || row.start + row.duration > closing ||
         typeof row.name !== 'string' || row.name.length > 50 || !Object.hasOwn(statuses, row.status) ||
         typeof row.coach !== 'string' || typeof row.student !== 'string' ||
+        (row.reason !== undefined && (row.status !== 'cancelled' || typeof row.reason !== 'string' || !row.reason.trim() || row.reason.length>250)) ||
         (row.kind === 'rental' && (row.coach || row.student || row.name.trim().length < 2)) ||
         (row.kind !== 'rental' && (!coaches.some(coach => coach.id === row.coach) ||
           !students.some(student => student.id === row.student)))) return null;

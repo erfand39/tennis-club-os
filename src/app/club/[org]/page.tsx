@@ -27,6 +27,7 @@ export default async function Dashboard({ params }: { params: Promise<{ org: str
     <header className="local-heading"><div><h1>نمای کلی</h1><p>{club.name}</p></div>
       <span className="local-label">{roles[club.role]}</span></header>
     <section className="local-hero"><div><h2>{club.name}</h2><p>{scope.length ? scope.map(branch => branch.name).join('، ') : 'شعبه‌ای برای حساب شما فعال نشده است.'}</p>
+      <Link className="hero-link" href={`/club/${org}/calendar`}>مشاهدهٔ تقویم</Link>
       {club.role === 'owner' && <Link className="hero-link" href={`/club/${org}/members`}>مدیریت دسترسی‌ها</Link>}</div></section>
     <div className="stats" aria-label="شاخص‌های محدودهٔ دسترسی">
       {Object.entries({ 'زمین‌های فعال': counts.courts, 'سانس‌های پیش رو': counts.bookings, 'مربیان قابل‌مشاهده': counts.coaches, 'شاگردان قابل‌مشاهده': counts.students })
