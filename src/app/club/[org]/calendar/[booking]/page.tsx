@@ -55,6 +55,7 @@ export default async function BookingPage({ params, searchParams }: {
   if (!data) notFound();
   const { detail,branch,students,history } = data;
   const now = branchDateTime(branch.timezone);
+  // eslint-disable-next-line react-hooks/purity -- This dynamic server page computes actions against the request time.
   const canChange = detail.status==='confirmed' && detail.session_status!=='completed' && +detail.starts_at>=Math.floor(Date.now()/60000)*60000;
   const hidden = (request: string) => <>
     <input type="hidden" name="org" value={org} /><input type="hidden" name="branch" value={branch.id} />
