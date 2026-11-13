@@ -53,6 +53,33 @@ before(async () => {
 });
 after(async () => db.end());
 
+test('security headers use a fresh CSP nonce and omit HSTS on HTTP', async () => {
+  const responses = [
+    await get('/'), await get('/'), await get('/club'),
+    await post('login',{email:'invalid',password:'wrong'}),
+    await get('/pwa/manifest.webmanifest'), await get('/sw.js'),
+  ];
+  const nonces = [];
+  for (const response of responses) {
+    const csp = response.headers.get('content-security-policy')
+      ?? response.headers.get('content-security-policy-report-only') ?? '';
+    assert.match(csp,/frame-ancestors 'none'/);
+    assert.match(csp,/object-src 'none'/);
+    assert.doesNotMatch(csp,/unsafe-eval/);
+    assert.equal(response.headers.get('strict-transport-security'),null);
+    assert.equal(response.headers.get('cross-origin-opener-policy'),'same-origin');
+    assert.match(response.headers.get('permissions-policy') ?? '',/camera=\(\)/);
+    const nonce = csp.match(/'nonce-([^']+)'/)?.[1];
+    assert.ok(nonce);
+    nonces.push(nonce);
+  }
+  const html = await responses[0].text();
+  const scripts = [...html.matchAll(/<script\b[^>]*>/g)];
+  assert.ok(scripts.length);
+  assert.ok(scripts.every(([tag]) => tag.includes(`nonce="${nonces[0]}"`)));
+  assert.equal(new Set(nonces).size, responses.length);
+});
+
 test('a fresh installation has no preloaded club or user records', async () => {
   const landing = await get('/');
   assert.equal(landing.status, 200);

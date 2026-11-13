@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { PwaStatus } from './pwa-status';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'باشگاه تنیس سام',
   description: 'سامانهٔ محلی مدیریت باشگاه تنیس سام',
