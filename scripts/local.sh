@@ -88,7 +88,7 @@ restore_archive() {
   export SAM_DB_PASSWORD SAM_AUTH_DB_PASSWORD SAM_WEB_DB_PASSWORD
   docker run --rm --interactive --pull=never --network none --entrypoint sh \
     -e SAM_DB_PASSWORD -e SAM_AUTH_DB_PASSWORD -e SAM_WEB_DB_PASSWORD \
-    --volume "$root/local:/opt/sam:ro" "$@" postgres:17.11-bookworm /opt/sam/restore-archive.sh "$mode" < "$archive"
+    --volume "$root/local:/opt/sam:ro" "$@" postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994 /opt/sam/restore-archive.sh "$mode" < "$archive"
 }
 
 case "${1:-up}" in
