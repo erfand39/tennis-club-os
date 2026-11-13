@@ -1,7 +1,7 @@
 import { randomUUID,timingSafeEqual } from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { appOrigin, authUrl, setupCode } from '@/lib/config';
-import { asUser, database, hasManagerAccess, isConfigured } from '@/lib/db';
+import { asUser, hasManagerAccess, isConfigured, transaction } from '@/lib/db';
 import { clubFor, members, uuid } from '@/lib/club';
 import { type ClubRole, roles } from '@/lib/roles';
 import { isBookingAction, runBookingAction } from '@/lib/booking-commands';
@@ -18,7 +18,7 @@ import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCoo
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
 import { isResourceKind, resourcePath } from '@/lib/resource-fields';
 import {
-  adminAuth, clearSessionCookie, cookieName, createWebSession, identify, publicAuth, removeSession, setSessionCookie,
+  adminAuth, clearSessionCookie, cookieName, createWebSession, discardNewAuthUser, identify, publicAuth, removeSession, setSessionCookie,
 } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -174,15 +174,36 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const name = nameOf(fields);
       const timezone = (fields.get('timezone') ?? 'Asia/Tehran').trim();
       try { new Intl.DateTimeFormat('en', { timeZone: timezone }); } catch { throw new InputError('timezone'); }
-      const result = await adminAuth().admin.createUser({ email, password, email_confirm: true });
-      if (result.error && !['email_exists', 'user_already_exists'].includes(result.error.code ?? '')) {
-        throw new InputError('setup-failed', 503);
-      }
-      const session = await signIn(email, password);
-      const { rows } = await database().query<{ id: string }>(
-        'select tennis_runtime.bootstrap_club($1,$2,$3) as id', [session.user.id, name, timezone]);
-      const response = go(`/club/${rows[0].id}`);
-      setSessionCookie(response, await createWebSession(session, currentToken));
+      const {id,existingSession} = await transaction(async db => {
+        await db.query('select pg_advisory_xact_lock(9053003)');
+        const {rows:[configuration]} = await db.query<{configured:boolean}>('select tennis_runtime.is_configured() as configured');
+        if (configuration.configured) throw new InputError('setup-done', 409);
+        const creationId = randomUUID();
+        const result = await adminAuth().admin.createUser({
+          email, password, email_confirm: true, user_metadata: {sam_creation_id:creationId},
+        });
+        if (result.error && !['email_exists', 'user_already_exists'].includes(result.error.code ?? '')) {
+          throw new InputError('setup-failed', 503);
+        }
+        const created = result.data.user;
+        // Authenticate existing accounts before using them. For new users, bootstrap before signing in.
+        const existingSession = created ? null : await signIn(email, password);
+        const ownerId = created?.id ?? existingSession?.user.id;
+        if (!ownerId) throw new InputError('setup-failed', 503);
+        let id: string;
+        try {
+          const {rows} = await db.query<{id:string}>(
+            'select tennis_runtime.bootstrap_club($1,$2,$3) as id', [ownerId,name,timezone]);
+          id = rows[0].id;
+        } catch (error) {
+          await discardNewAuthUser(created,creationId);
+          throw error;
+        }
+        return {id,existingSession};
+      });
+      const session = existingSession ?? await signIn(email,password);
+      const response = go(`/club/${id}`);
+      setSessionCookie(response,await createWebSession(session,currentToken));
       return response;
     }
     if (action === 'redeem') {
@@ -291,11 +312,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       fields.set('active', 'yes');
       const email = emailOf(fields);
       const access = accessOf(fields);
-      const result = await adminAuth().admin.generateLink({ type: 'invite', email });
-      if (result.error || !result.data.properties?.hashed_token || !result.data.user?.id) throw new InputError('invite');
-      await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5)',
-        [org, result.data.user.id, access.role, true, access.locations]));
-      return NextResponse.json({ link: redeemUrl('invite', result.data.properties.hashed_token) });
+      return await asUser(user.id, async db => {
+        await db.query("select pg_advisory_xact_lock(hashtextextended('sam-invite:' || $1,0))", [email]);
+        const creationId = randomUUID();
+        const result = await adminAuth().admin.generateLink({
+          type:'invite',email,options:{data:{sam_creation_id:creationId}},
+        });
+        if (result.error || !result.data.properties?.hashed_token || !result.data.user?.id) throw new InputError('invite');
+        try {
+          await db.query('select public.set_club_member($1,$2,$3,$4,$5)',
+            [org,result.data.user.id,access.role,true,access.locations]);
+        } catch (error) {
+          await discardNewAuthUser(result.data.user,creationId);
+          throw error;
+        }
+        return NextResponse.json({link:redeemUrl('invite',result.data.properties.hashed_token)});
+      });
     }
     if (action === 'recovery') {
       const target = idOf(fields, 'user');
