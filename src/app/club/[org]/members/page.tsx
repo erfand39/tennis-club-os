@@ -58,7 +58,7 @@ export default async function Members({ params, searchParams }: {
               <AccessFields scope={scope} member={member} />
               <button className="button primary">ذخیرهٔ دسترسی</button>
             </form>}
-            {member.active && member.email && <LinkForm action="recovery" label="ساخت پیوند بازیابی">
+            {member.user_id !== user.id && member.active && member.email && <LinkForm action="recovery" label="ساخت پیوند بازیابی">
               <input type="hidden" name="org" value={org} /><input type="hidden" name="user" value={member.user_id} />
             </LinkForm>}
           </div>
