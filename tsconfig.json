@@ -5,6 +5,7 @@
     "strict": true,
     "allowJs": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "module": "esnext",

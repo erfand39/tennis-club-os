@@ -10,6 +10,8 @@ import { classesPath } from '@/lib/class-fields';
 import { calendarPath } from '@/lib/calendar-dates';
 import { isFinanceAction,runFinanceAction } from '@/lib/finance-commands';
 import { financePath } from '@/lib/finance-fields';
+import { errorCode } from '@/lib/api-errors';
+import { isClubFinanceCommand } from '@/lib/club-finance-fields';
 import { InputError } from '@/lib/input';
 import { clearLoginFailures, LoginThrottled, loginDelay, recordLoginFailure, redeemThrottleKey } from '@/lib/login-throttle';
 import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCookie } from '@/lib/notifications';
@@ -311,20 +313,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     return NextResponse.json({ error: 'missing' }, { status: 404 });
   } catch (failure) {
-    const dbError = failure as { code?: string; message?: string };
-    const code = failure instanceof InputError ? failure.code
-      : dbError.code === '42501' ? 'denied'
-      : dbError.message === 'invalid_member_locations' ? 'branches'
-      : dbError.message === 'manager_role_required' ? 'manager-only'
-      : dbError.message === 'club_already_configured' ? 'setup-done'
-      : dbError.message === 'resource_stale' ? 'resource-stale'
-      : dbError.message === 'request_payload_mismatch' ? 'resource-request'
-      : dbError.message === 'coach_court_scope_invalid' ? 'resource-courts'
-      : dbError.message === 'rate_must_follow_latest' ? 'resource-rate'
-      : dbError.code === '23P01' ? 'resource-conflict'
-      : dbError.code === '23505' ? 'resource-duplicate'
-      : dbError.code === '23514' || dbError.code?.startsWith('22') ? 'resource-invalid'
-      : dbError.code === '40001' || dbError.code === '40P01' || dbError.code === '55P03' ? 'retry' : 'unavailable';
+    const family = isClubFinanceCommand(action) ? 'club-finance'
+      : isFinanceAction(action) ? 'finance'
+      : isBookingAction(action) ? 'booking'
+      : isClassAction(action) ? 'class'
+      : isResourceCommand(action) ? 'resource' : 'general';
+    const code = errorCode(failure, family);
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
     const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
     if (failure instanceof LoginThrottled) response.headers.set('Retry-After', String(failure.retryAfter));
