@@ -20,6 +20,7 @@ export function DeviceNotifications({org,publicKey,enabled}:{org:string;publicKe
     const standalone=window.matchMedia('(display-mode: standalone)').matches
       ||(navigator as Navigator&{standalone?:boolean}).standalone===true;
     if (appleMobile&&!standalone) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Browser-only capability is read after hydration.
       setHint('در آیفون و آیپد، برنامه را به صفحهٔ اصلی اضافه و از همان‌جا باز کنید.');
       return;
     }

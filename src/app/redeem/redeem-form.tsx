@@ -1,16 +1,21 @@
 'use client';
 
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useState, useSyncExternalStore } from 'react';
 import { errorMessage } from '@/lib/messages';
 
+function subscribeToHash(callback: () => void) {
+  window.addEventListener('hashchange', callback);
+  return () => window.removeEventListener('hashchange', callback);
+}
+
+function redemptionToken() {
+  return new URLSearchParams(location.hash.slice(1)).get('token') ?? '';
+}
+
 export function RedeemForm({ mode }: { mode: 'invite' | 'recovery' }) {
-  const [token, setToken] = useState<string | null>(null);
+  const token = useSyncExternalStore(subscribeToHash, redemptionToken, () => null);
   const [message, setMessage] = useState<string>();
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    setToken(new URLSearchParams(location.hash.slice(1)).get('token') ?? '');
-  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
