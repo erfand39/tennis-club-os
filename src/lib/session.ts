@@ -12,6 +12,10 @@ export const cookieName = 'sam_session';
 const lifetimeSeconds = 12 * 60 * 60;
 type Credentials = { access: string; refresh: string };
 export type WebUser = { id: string; email: string };
+const verifiedUsers = new Map<string, { user: WebUser; expiresAt: number }>();
+const verifiedUserLimit = 500;
+const verifiedUserLifetime = 30_000;
+
 type StoredSession = {
   user_id: string;
   email: string;
@@ -101,7 +105,9 @@ async function refresh(hash: string): Promise<StoredSession | null> {
     if (!row) return null;
     if (!needRefresh(row)) return row;
 
-    const result = await refreshAuthSession(open(row).refresh);
+    const credentials = open(row);
+    verifiedUsers.delete(digest(credentials.access));
+    const result = await refreshAuthSession(credentials.refresh);
     if (!result.data.session || result.error || result.data.session.user.id !== row.user_id) {
       if (!result.error?.status || result.error.status >= 500) throw new Error('Local Auth is unavailable.');
       await client.query('delete from tennis_runtime.web_sessions where token_hash=$1', [hash]);
@@ -124,13 +130,28 @@ export async function identify(value: string | undefined): Promise<WebUser | nul
   if (!rows[0]) return null;
   const row = needRefresh(rows[0]) ? await refresh(hash) : rows[0];
   if (!row) return null;
-  const { data, error } = await publicAuth().getUser(open(row).access);
-  if (error || !data.user || data.user.id !== row.user_id) {
-    if (error && (!error.status || error.status >= 500)) throw new Error('Local Auth is unavailable.');
-    return null;
+  const access = open(row).access;
+  const key = digest(access);
+  const cached = verifiedUsers.get(key);
+  let user = cached && cached.expiresAt > Date.now() && cached.user.id === row.user_id
+    ? cached.user : undefined;
+
+  if (!user) {
+    verifiedUsers.delete(key);
+    const { data, error } = await publicAuth().getUser(access);
+    if (error || !data.user || data.user.id !== row.user_id) {
+      if (error && (!error.status || error.status >= 500)) throw new Error('Local Auth is unavailable.');
+      return null;
+    }
+    user = { id: row.user_id, email: data.user.email ?? row.email };
+    if (verifiedUsers.size >= verifiedUserLimit) {
+      const oldest = verifiedUsers.keys().next();
+      if (!oldest.done) verifiedUsers.delete(oldest.value);
+    }
+    verifiedUsers.set(key, { user, expiresAt: Date.now() + verifiedUserLifetime });
   }
-  if (!(await hasManagerAccess(row.user_id))) return null;
-  return { id: row.user_id, email: data.user.email ?? row.email };
+
+  return await hasManagerAccess(row.user_id) ? user : null;
 }
 
 export const currentUser = cache(async () => identify((await cookies()).get(cookieName)?.value));
@@ -144,5 +165,9 @@ export async function removeSession(value: string | undefined, device?:string): 
     if (session&&device) await client.query('delete from tennis_runtime.push_devices where id=$1 and user_id=$2',[device,session.user_id]);
     return session;
   });
-  if (row) await adminAuth().admin.signOut(open(row).access,'local').catch(()=>{});
+  if (row) {
+    const access = open(row).access;
+    verifiedUsers.delete(digest(access));
+    await adminAuth().admin.signOut(access,'local').catch(()=>{});
+  }
 }
