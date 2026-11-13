@@ -106,6 +106,30 @@ test('sign in, signed cookies, and a persisted profile', async () => {
   assert.match(await (await get(`/club/${org}/profile`, owner)).text(), /نام مالک سام/);
 });
 
+test('sign-in limits five failures per email, expires, and clears after success', async () => {
+  await db.query('delete from tennis_runtime.login_failures');
+  const wrong = {email:ownerEmail,password:'incorrect-password'};
+  for (let i=0;i<5;i++) assert.equal((await post('login',wrong)).status,401);
+  const blocked = await post('login',{email:ownerEmail.toUpperCase(),password});
+  assert.equal(blocked.status,429);
+  assert.ok(Number(blocked.headers.get('retry-after')) >= 55);
+  assert.deepEqual(await blocked.json(),{error:'rate'});
+  const hash = createHash('sha256').update(ownerEmail).digest('hex');
+  const {rows} = await db.query('select email_hash from tennis_runtime.login_failures');
+  assert.deepEqual(rows,Array.from({length:5},()=>({email_hash:hash})));
+  assert.equal((await post('login',{email:'isolated@sam.example',password:'incorrect-password'})).status,401);
+  await db.query(`insert into tennis_runtime.login_failures (email_hash)
+    select lpad(i::text,64,'0') from generate_series(1,60) as g(i)`);
+  const global = await post('login',{email:ownerEmail,password});
+  assert.equal(global.status,429);
+  assert.ok(Number(global.headers.get('retry-after')) >= 290);
+  await db.query("delete from tennis_runtime.login_failures where email_hash like '0000%'");
+  await db.query("update tennis_runtime.login_failures set failed_at=now()-interval '2 minutes' where email_hash=$1",[hash]);
+  assert.equal((await post('login',{email:ownerEmail,password})).status,303);
+  assert.equal((await db.query('select 1 from tennis_runtime.login_failures where email_hash=$1',[hash])).rowCount,0);
+  await db.query('delete from tennis_runtime.login_failures');
+});
+
 test('invitation and single-use acceptance for a manager', async () => {
   for (const role of roles) {
     const email = `${role}@sam.example`;
@@ -148,7 +172,9 @@ test('manager-only invitations and branch isolation', async () => {
   const manager = identities.get('admin');
   assert.equal((await post('member', {org,user:manager.id,role:'admin',active:'no',location:branch},owner)).status,303);
   assert.equal((await get(`/club/${org}`,manager.cookie)).status,307);
-  assert.equal((await post('login',{email:manager.email,password})).status,403);
+  const rejected = await post('login',{email:manager.email,password});
+  assert.equal(rejected.status,401);
+  assert.deepEqual(await rejected.json(),{error:'login'});
   assert.equal((await post('member', {org,user:manager.id,role:'admin',active:'yes',location:branch},owner)).status,303);
 
 });
