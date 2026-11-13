@@ -3,17 +3,28 @@ import pg, { type PoolClient } from 'pg';
 import { databaseUrl } from './config';
 
 let pool: pg.Pool | undefined;
+let refreshPool: pg.Pool | undefined;
 
-export function database(): pg.Pool {
-  if (!pool) {
-    pool = new pg.Pool({ connectionString: databaseUrl(), max: 10, connectionTimeoutMillis: 4000, statement_timeout: 12000 });
-    pool.on('error', () => console.warn('Local PostgreSQL connection closed.'));
-  }
-  return pool;
+function createPool(max: number): pg.Pool {
+  const instance = new pg.Pool({ connectionString: databaseUrl(), max, connectionTimeoutMillis: 4000, statement_timeout: 12000 });
+  instance.on('error', () => console.warn('Local PostgreSQL connection closed.'));
+  return instance;
 }
 
-export async function transaction<T>(work: (client: PoolClient) => Promise<T>, consistentRead = false): Promise<T> {
-  const client = await database().connect();
+export function database(): pg.Pool {
+  return pool ??= createPool(10);
+}
+
+export function refreshDatabase(): pg.Pool {
+  return refreshPool ??= createPool(3);
+}
+
+export async function transaction<T>(
+  work: (client: PoolClient) => Promise<T>,
+  consistentRead = false,
+  connectionPool = database(),
+): Promise<T> {
+  const client = await connectionPool.connect();
   try {
     await client.query(consistentRead ? 'begin isolation level repeatable read read only' : 'begin');
     const result = await work(client);

@@ -120,7 +120,7 @@ function redeemUrl(mode: 'invite' | 'recovery', token: string): string {
 export async function GET(_: NextRequest, context: { params: Promise<{ action: string }> }) {
   if ((await context.params).action !== 'health') return NextResponse.json({ ok: false }, { status: 404 });
   try {
-    const [, auth] = await Promise.all([isConfigured(), fetch(new URL('/health', authUrl()), { cache: 'no-store', signal: AbortSignal.timeout(3000) })]);
+    const [, auth] = await Promise.all([isConfigured(), fetch(new URL('/health', authUrl()), { cache: 'no-store', signal: AbortSignal.timeout(1500) })]);
     return NextResponse.json({ ok: auth.ok }, { status: auth.ok ? 200 : 503 });
   } catch {
     return NextResponse.json({ ok: false }, { status: 503 });
@@ -301,7 +301,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       : dbError.code === '23P01' ? 'resource-conflict'
       : dbError.code === '23505' ? 'resource-duplicate'
       : dbError.code === '23514' || dbError.code?.startsWith('22') ? 'resource-invalid'
-      : dbError.code === '40001' || dbError.code === '40P01' ? 'retry' : 'unavailable';
+      : dbError.code === '40001' || dbError.code === '40P01' || dbError.code === '55P03' ? 'retry' : 'unavailable';
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
     const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
     if (code==='unavailable') {

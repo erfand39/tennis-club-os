@@ -6,7 +6,7 @@ import type { NextResponse } from 'next/server';
 import { cache } from 'react';
 import { makeAuthClient } from '../../local/auth-client.mjs';
 import { appOrigin, authSecret, authUrl, sessionKey } from './config';
-import { database, hasManagerAccess, transaction } from './db';
+import { database, hasManagerAccess, refreshDatabase, transaction } from './db';
 
 export const cookieName = 'sam_session';
 const lifetimeSeconds = 12 * 60 * 60;
@@ -76,13 +76,32 @@ function needRefresh(row: StoredSession): boolean {
 const sessionSql = `select user_id,email,credentials,access_expires_at from tennis_runtime.web_sessions
   where token_hash=$1 and expires_at > now()`;
 
+async function refreshAuthSession(token: string) {
+  const deadline = AbortSignal.timeout(3000);
+  const auth = makeAuthClient(authUrl(), undefined, 3000, deadline);
+  // The SDK retries transient failures. Stop waiting at the same deadline as its requests.
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([
+      new Promise<never>((_, reject) => {
+        onAbort = () => reject(new Error('Local Auth is unavailable.'));
+        deadline.addEventListener('abort', onAbort, { once: true });
+      }),
+      auth.refreshSession({ refresh_token: token }),
+    ]);
+  } finally {
+    if (onAbort) deadline.removeEventListener('abort', onAbort);
+  }
+}
+
 async function refresh(hash: string): Promise<StoredSession | null> {
   return transaction(async client => {
+    await client.query("set local lock_timeout = '2s'");
     const { rows: [row] } = await client.query<StoredSession>(`${sessionSql} for update`, [hash]);
     if (!row) return null;
     if (!needRefresh(row)) return row;
 
-    const result = await publicAuth().refreshSession({ refresh_token: open(row).refresh });
+    const result = await refreshAuthSession(open(row).refresh);
     if (!result.data.session || result.error || result.data.session.user.id !== row.user_id) {
       if (!result.error?.status || result.error.status >= 500) throw new Error('Local Auth is unavailable.');
       await client.query('delete from tennis_runtime.web_sessions where token_hash=$1', [hash]);
@@ -95,7 +114,7 @@ async function refresh(hash: string): Promise<StoredSession | null> {
     await client.query('update tennis_runtime.web_sessions set credentials=$2,email=$3,access_expires_at=to_timestamp($4) where token_hash=$1',
       [hash, encrypted, email, accessExpiry]);
     return { ...row, email, credentials: encrypted, access_expires_at: new Date(accessExpiry * 1000) };
-  });
+  }, false, refreshDatabase());
 }
 
 export async function identify(value: string | undefined): Promise<WebUser | null> {

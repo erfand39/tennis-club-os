@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { createECDH, randomBytes, randomUUID } from 'node:crypto';
+import { createECDH, createHash, randomBytes, randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { after, before, test } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 import pg from 'pg';
@@ -179,6 +180,44 @@ test('concurrent refresh preserves a single valid local session', async () => {
   assert.deepEqual(results.map(response => response.status), [200, 200]);
   const { rows } = await db.query('select count(*)::int as count from tennis_runtime.web_sessions where user_id=$1 and access_expires_at>now()', [id]);
   assert.equal(rows[0].count, 1);
+});
+
+test('slow Auth keeps refresh connections separate from health checks', {
+  skip: !process.env.SAM_TEST_AUTH_PID,
+}, async () => {
+  const authPid = Number(process.env.SAM_TEST_AUTH_PID);
+  assert.ok(Number.isSafeInteger(authPid) && authPid > 1);
+  const cookies = [];
+  for (let index = 0; index < 5; index++) {
+    const response = await post('login', {email:ownerEmail,password});
+    assert.equal(response.status,303);
+    cookies.push(sessionCookie(response));
+  }
+  const hashes = cookies.map(cookie => createHash('sha256').update(cookie.split('=')[1]).digest('hex'));
+  await db.query("update tennis_runtime.web_sessions set access_expires_at=now()-interval '1 second' where token_hash=any($1)", [hashes]);
+  let pending;
+  process.kill(authPid,'SIGSTOP');
+  try {
+    pending = Promise.all(cookies.map(cookie => get(`/club/${org}`, cookie)));
+    const deadline = performance.now() + 1800;
+    let held = 0;
+    while (performance.now() < deadline) {
+      const {rows:[row]} = await db.query(`select count(*)::int as count from pg_stat_activity
+        where usename='tennis_web' and state='idle in transaction' and query like '%web_sessions%for update%'`);
+      held = row.count;
+      if (held === 3) break;
+      await delay(25);
+    }
+    assert.equal(held,3);
+    const start = performance.now();
+    const health = await get('/api/health');
+    assert.equal(health.status,503);
+    assert.ok(performance.now()-start < 2000);
+  } finally {
+    process.kill(authPid,'SIGCONT');
+    await pending;
+  }
+  for (const cookie of cookies) assert.equal((await get(`/club/${org}`,cookie)).status,200);
 });
 
 test('recovery and logout revoke prior sessions', async () => {
