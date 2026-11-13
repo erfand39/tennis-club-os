@@ -12,8 +12,9 @@
     "test:pwa": "node --test scripts/pwa.test.mjs",
     "test:recovery": "node --test scripts/recovery.test.mjs",
     "lint": "eslint src scripts local",
-    "test": "npm run test:db && npm run test:local && npm run test:pwa && npm run test:recovery",
-    "check": "npm run typecheck && npm run lint && npm run build"
+    "test": "npm run test:api && npm run test:db && npm run test:local && npm run test:pwa && npm run test:recovery",
+    "check": "npm run typecheck && npm run lint && npm run build",
+    "test:api": "node --test scripts/api-errors.test.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

@@ -1,3 +1,10 @@
 export class InputError extends Error {
-  constructor(readonly code: string, readonly status = 400) { super(code); }
+  readonly code: string;
+  readonly status: number;
+
+  constructor(code: string, status = 400) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
 }
