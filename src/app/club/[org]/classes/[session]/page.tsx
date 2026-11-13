@@ -27,6 +27,7 @@ export default async function ClassPage({params,searchParams}:{
 
   const active=roster.filter(item=>!item.withdrawn_at);
   const withdrawn=roster.filter(item=>item.withdrawn_at);
+  // eslint-disable-next-line react-hooks/purity -- This dynamic server page computes actions against the request time.
   const now=Date.now();
   const scheduled=branchDateTime(session.timezone,session.starts_at);
   const completed=session.status==='completed';

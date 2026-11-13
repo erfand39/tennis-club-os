@@ -1,9 +1,10 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function InstallPage() {
   return <main className="pwa-install">
     <header className="pwa-hero">
-      <img src="/pwa/icon-192.png" width="64" height="64" alt="" />
+      <Image unoptimized src="/pwa/icon-192.png" width="64" height="64" alt="" />
       <div><h1>نصب باشگاه تنیس سام</h1><p>پنل باشگاه را از صفحهٔ اصلی دستگاه باز کنید.</p></div>
     </header>
     <div className="pwa-platforms">
