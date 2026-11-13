@@ -11,6 +11,7 @@ import { calendarPath } from '@/lib/calendar-dates';
 import { isFinanceAction,runFinanceAction } from '@/lib/finance-commands';
 import { financePath } from '@/lib/finance-fields';
 import { InputError } from '@/lib/input';
+import { clearLoginFailures, LoginThrottled, loginDelay, recordLoginFailure, redeemThrottleKey } from '@/lib/login-throttle';
 import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCookie } from '@/lib/notifications';
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
 import { isResourceKind, resourcePath } from '@/lib/resource-fields';
@@ -145,8 +146,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       return response;
     }
     if (action === 'login') {
-      const session = await signIn(emailOf(fields), passwordOf(fields, false));
-      if (!(await hasManagerAccess(session.user.id))) throw new InputError('manager-only', 403);
+      const email = emailOf(fields);
+      const password = passwordOf(fields, false);
+      const delay = await loginDelay(email);
+      if (delay > 0) throw new LoginThrottled(delay);
+      const session = await signIn(email, password).catch(async error => {
+        if (error instanceof InputError && error.status === 401) await recordLoginFailure(email);
+        throw error;
+      });
+      if (!(await hasManagerAccess(session.user.id))) {
+        console.warn('Local sign-in rejected for an account without manager access.');
+        await recordLoginFailure(email);
+        throw new InputError('login', 401);
+      }
+      await clearLoginFailures(email);
       const response = go('/club');
       setSessionCookie(response, await createWebSession(session, currentToken));
       return response;
@@ -177,14 +190,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const token = fields.get('token') ?? '';
       if (!/^[A-Za-z0-9_-]{30,160}$/.test(token)) throw new InputError('link');
       const password = passwordOf(fields);
+      const throttleKey = redeemThrottleKey + ':' + mode;
+      const delay = await loginDelay(throttleKey);
+      if (delay > 0) throw new LoginThrottled(delay);
       const auth = publicAuth();
       const result = await auth.verifyOtp({ type: mode, token_hash: token });
-      if (result.error || !result.data.session) throw new InputError('link');
+      if (result.error || !result.data.session) {
+        const status = result.error?.status;
+        if (status === 429) throw new InputError('rate', 429);
+        if (result.error && (!status || status >= 500)) throw new InputError('unavailable', 503);
+        if (status === 400 || status === 401 || status === 403) await recordLoginFailure(throttleKey);
+        throw new InputError('link');
+      }
       if (!(await hasManagerAccess(result.data.session.user.id))) throw new InputError('manager-only', 403);
       const changed = await auth.updateUser({ password });
       if (changed.error || !changed.data.user) throw new InputError('password-update');
       // Sign in with the new password so the local session uses fresh tokens.
       const session = await signIn(changed.data.user.email ?? '', password);
+      await clearLoginFailures(throttleKey);
       const response = wantsJson ? NextResponse.json({ next: '/club' }) : go('/club');
       setSessionCookie(response, await createWebSession(session, currentToken, true));
       return response;
@@ -304,6 +327,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       : dbError.code === '40001' || dbError.code === '40P01' || dbError.code === '55P03' ? 'retry' : 'unavailable';
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
     const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
+    if (failure instanceof LoginThrottled) response.headers.set('Retry-After', String(failure.retryAfter));
     if (code==='unavailable') {
       const trace=randomUUID();
       console.error(JSON.stringify({event:'local_api_unavailable',trace}));
