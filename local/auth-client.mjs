@@ -9,14 +9,14 @@ function serviceToken(secret) {
   return `${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
-/** @param {string} url @param {string} [secret] */
-export function makeAuthClient(url, secret) {
+/** @param {string} url @param {string} [secret] @param {number} [timeoutMs] @param {AbortSignal} [deadline] */
+export function makeAuthClient(url, secret, timeoutMs = 8000, deadline) {
   return new AuthClient({
     url,
     headers: secret ? { Authorization: `Bearer ${serviceToken(secret)}` } : {},
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
-    fetch: (input, init) => fetch(input, { ...init, cache: 'no-store', signal: AbortSignal.timeout(8000) }),
+    fetch: (input, init) => fetch(input, { ...init, cache: 'no-store', signal: deadline ?? AbortSignal.timeout(timeoutMs) }),
   });
 }
