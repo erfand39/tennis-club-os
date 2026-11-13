@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
@@ -182,8 +183,16 @@ test('concurrent refresh preserves a single valid local session', async () => {
 
 test('recovery and logout revoke prior sessions', async () => {
   const manager = identities.get('admin');
+  const {rows:[{id:ownerId}]} = await db.query('select id from auth.users where email=$1',[ownerEmail]);
+  const denied = await post('recovery', {org,user:ownerId}, owner);
+  assert.equal(denied.status,403);
   const response = await post('recovery', { org, user: manager.id }, owner);
   assert.equal(response.status, 200);
+  const {rows} = await db.query(`select actor_user_id,target_user_id,current_access
+    from tennis_private.access_audit where organization_id=$1 and action='recovery_link_issued'`, [org]);
+  assert.deepEqual(rows, [{
+    actor_user_id:ownerId, target_user_id:manager.id, current_access:{role:'admin',source:'panel'},
+  }]);
   const newPassword = `${password}-next`;
   const recovered = await post('redeem', { mode: 'recovery', token: token((await response.json()).link), password: newPassword });
   assert.equal(recovered.status, 200, recovered.status === 200 ? '' : await recovered.text());
@@ -193,6 +202,21 @@ test('recovery and logout revoke prior sessions', async () => {
   assert.equal((await post('logout', {}, cookie)).status, 303);
   assert.equal((await get(`/club/${org}`, cookie)).status, 307);
   assert.equal((await post('login', { email: manager.email, password: newPassword })).status, 303);
+});
+
+test('CLI owner recovery records a single event before returning the link', {
+  skip: !process.env.SAM_AUTH_URL || !process.env.SAM_JWT_SECRET || !process.env.SAM_DATABASE_URL,
+}, async () => {
+  const {rows:[{id:ownerId}]} = await db.query('select id from auth.users where email=$1',[ownerEmail]);
+  const stdout = execFileSync(process.execPath,['scripts/owner-recovery.mjs',ownerEmail],{
+    encoding:'utf8',timeout:10000,
+  }).trim();
+  assert.ok(token(stdout));
+  const {rows} = await db.query(`select actor_user_id,target_user_id,current_access
+    from tennis_private.access_audit where organization_id=$1 and action='recovery_link_issued' and target_user_id=$2`, [org,ownerId]);
+  assert.deepEqual(rows, [{
+    actor_user_id:null, target_user_id:ownerId, current_access:{role:'owner',source:'cli'},
+  }]);
 });
 
 test('management screens create, filter, edit and archive local records', async () => {
@@ -1132,5 +1156,5 @@ test('leaving preserves the audit trail and removes club access', async () => {
   assert.equal((await post('leave',{org},cookie)).status,303);
   assert.equal((await get(`/club/${org}`,cookie)).status,307);
   const {rows}=await db.query("select action from tennis_private.access_audit where organization_id=$1 and target_user_id=$2 order by id",[org,manager.id]);
-  assert.deepEqual(rows.map(row=>row.action),['access_changed','access_changed','access_changed','membership_left']);
+  assert.deepEqual(rows.map(row=>row.action),['access_changed','access_changed','access_changed','recovery_link_issued','membership_left']);
 });

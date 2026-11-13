@@ -403,3 +403,27 @@ test('calendar query uses the scope and start-time index on 2400 historical rows
   assert.ok(JSON.stringify(explain[0].Plan).includes('bookings_calendar_idx'), JSON.stringify(explain[0].Plan));
   console.log(`calendar plan: ${explain[0]['Execution Time']} ms with 2400 historical rows`);
 });
+
+test('recovery audit is restricted to active owners and members of the same club', async () => {
+  const sql = 'select public.record_member_recovery($1,$2)';
+  await owner.query(sql, [org, users.manager]);
+  const {rows} = await db.query(`select actor_user_id,target_user_id,current_access
+    from tennis_private.access_audit where organization_id=$1 and action='recovery_link_issued'`, [org]);
+  assert.deepEqual(rows, [{
+    actor_user_id: users.owner, target_user_id: users.manager, current_access: {role:'admin',source:'panel'},
+  }]);
+  await assert.rejects(manager.query(sql, [org, users.owner]), {code:'42501'});
+  await assert.rejects(otherOwner.query(sql, [org, users.manager]), {code:'42501'});
+  await assert.rejects(owner.query(sql, [org, users.outsider]), {code:'42501'});
+  await assert.rejects(owner.query(sql, [id(301), users.coach]), {code:'42501'});
+  await assert.rejects(anon.query(sql, [org, users.manager]), {code:'42501'});
+  try {
+    await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',
+      [org,users.manager]);
+    await assert.rejects(owner.query(sql, [org, users.manager]), {code:'42501'});
+  } finally {
+    await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',
+      [org,users.manager]);
+  }
+  assert.equal(await scalar(db, "select count(*)::int from tennis_private.access_audit where action='recovery_link_issued'"), 1);
+});

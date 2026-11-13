@@ -10,7 +10,8 @@ try {
   if (!rows[0].allowed) throw new Error('The account is not an active owner of this local club.');
   const auth = makeAuthClient(process.env.SAM_AUTH_URL, process.env.SAM_JWT_SECRET);
   const { data, error } = await auth.admin.generateLink({ type: 'recovery', email });
-  if (error || !data.properties.hashed_token) throw new Error('Could not generate the local recovery link.');
+  if (error || !data.properties?.hashed_token || !data.user?.id) throw new Error('Could not generate the local recovery link.');
+  await client.query('select tennis_runtime.record_owner_recovery($1)', [data.user.id]);
   const link = new URL('/redeem?mode=recovery', process.env.SAM_ORIGIN);
   link.hash = new URLSearchParams({ token: data.properties.hashed_token }).toString();
   console.log(link.toString());

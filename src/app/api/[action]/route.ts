@@ -274,10 +274,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     if (action === 'recovery') {
       const target = idOf(fields, 'user');
+      if (target === user.id) throw new InputError('denied', 403);
       const member = (await members(user.id, org)).find(row => row.user_id === target && row.active);
       if (!member?.email) throw new InputError('denied', 403);
       const { data, error } = await adminAuth().admin.generateLink({ type: 'recovery', email: member.email });
       if (error || !data.properties?.hashed_token) throw new InputError('recovery');
+      try {
+        await asUser(user.id, db => db.query('select public.record_member_recovery($1,$2)', [org, target]));
+      } catch {
+        throw new InputError('unavailable', 503);
+      }
       return NextResponse.json({ link: redeemUrl('recovery', data.properties.hashed_token) });
     }
     return NextResponse.json({ error: 'missing' }, { status: 404 });
