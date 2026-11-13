@@ -2,7 +2,7 @@ name: sam-tennis-local
 
 services:
   db:
-    image: postgres:17.11-bookworm
+    image: postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${SAM_DB_PASSWORD:?Run scripts/local.sh up}
@@ -21,7 +21,7 @@ services:
     networks: [backend]
 
   auth:
-    image: supabase/gotrue:v2.189.0
+    image: supabase/gotrue:v2.189.0@sha256:385184459f57569c54c25209f51f3b2be99ddd7c4ce9e3555b5d3eea8447b7cf
     restart: unless-stopped
     depends_on:
       db:
