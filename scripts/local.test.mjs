@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createECDH, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -271,6 +272,31 @@ test('slow Auth keeps refresh connections separate from health checks', {
     await pending;
   }
   for (const cookie of cookies) assert.equal((await get(`/club/${org}`,cookie)).status,200);
+});
+
+test('verified Auth user is reused but manager access and logout take effect immediately', {
+  skip: !process.env.SAM_TEST_AUTH_LOG,
+}, async () => {
+  const authLog = process.env.SAM_TEST_AUTH_LOG;
+  const count = async () => (await readFile(authLog,'utf8')).split('\n')
+    .filter(line => line.includes('"path":"/user"') && line.includes('"method":"GET"')).length;
+  const manager = identities.get('admin');
+  const login = await post('login',{email:manager.email,password});
+  assert.equal(login.status,303);
+  const cookie = sessionCookie(login);
+  const before = await count();
+  assert.equal((await get(`/club/${org}`,cookie)).status,200);
+  assert.equal((await get(`/club/${org}`,cookie)).status,200);
+  assert.equal(await count(),before+1);
+  try {
+    await db.query('update public.organization_members set active=false where user_id=$1',[manager.id]);
+    assert.equal((await get(`/club/${org}`,cookie)).status,307);
+    assert.equal(await count(),before+1);
+  } finally {
+    await db.query('update public.organization_members set active=true where user_id=$1',[manager.id]);
+  }
+  assert.equal((await post('logout',{},cookie)).status,303);
+  assert.equal((await get(`/club/${org}`,cookie)).status,307);
 });
 
 test('recovery and logout revoke prior sessions', async () => {
