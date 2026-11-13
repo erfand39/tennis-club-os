@@ -1,6 +1,6 @@
 import 'server-only';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import type { Session } from '@supabase/auth-js';
+import type { Session, User } from '@supabase/auth-js';
 import { cookies } from 'next/headers';
 import type { NextResponse } from 'next/server';
 import { cache } from 'react';
@@ -29,6 +29,20 @@ const cookieOptions = () => ({ httpOnly: true, sameSite: 'lax' as const, secure:
 
 export const publicAuth = () => makeAuthClient(authUrl());
 export const adminAuth = () => makeAuthClient(authUrl(), authSecret());
+
+export async function discardNewAuthUser(user: User | null | undefined, creationId: string): Promise<void> {
+  if (!user || user.user_metadata?.sam_creation_id !== creationId) return;
+  try {
+    const auth = adminAuth();
+    const {data, error} = await auth.admin.getUserById(user.id);
+    const current = data.user;
+    if (error || !current || current.last_sign_in_at || current.user_metadata?.sam_creation_id !== creationId) return;
+    const age = Date.now() - Date.parse(current.created_at);
+    if (age >= 0 && age < 15_000) await auth.admin.deleteUser(user.id);
+  } catch {
+    // Preserve the original setup or invitation error.
+  }
+}
 
 function seal(tokens: Credentials, userId: string): string {
   const iv = randomBytes(12);

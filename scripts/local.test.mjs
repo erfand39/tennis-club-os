@@ -100,6 +100,22 @@ test('a fresh installation has no preloaded club or user records', async () => {
   }
 });
 
+test('a failed bootstrap removes only the new setup user', async () => {
+  const email = 'orphan-setup@sam.example';
+  const fields = {email,password,code,name:'مالک آزمون',timezone:'Asia/Tehran'};
+  await db.query(`create function tennis_runtime.reject_fixture_setup() returns trigger
+    language plpgsql as $$ begin raise exception 'fixture_setup_failure'; end; $$;
+    create trigger reject_fixture_setup before insert on public.organizations
+    for each row execute function tennis_runtime.reject_fixture_setup()`);
+  try {
+    assert.equal((await post('setup',fields)).status,503);
+    assert.equal((await db.query('select 1 from auth.users where email=$1',[email])).rowCount,0);
+  } finally {
+    await db.query(`drop trigger reject_fixture_setup on public.organizations;
+      drop function tennis_runtime.reject_fixture_setup()`);
+  }
+});
+
 test('first owner setup, invalid codes, hostile origins and one-time initialization', async () => {
   assert.equal((await get('/api/health')).status, 200);
   assert.equal((await get('/club')).status, 307);
@@ -172,6 +188,22 @@ test('invitation and single-use acceptance for a manager', async () => {
     const { rows } = await db.query('select id from auth.users where email=$1', [email]);
     identities.set(role, { email, cookie, id: rows[0].id });
   }
+});
+
+test('a failed invitation cleans up its new Auth user and preserves an existing user', async () => {
+  const email = 'orphan-invite@sam.example';
+  const fields = {org,email,role:'admin',location:randomUUID()};
+  const failed = await post('invite',fields,owner);
+  assert.equal(failed.status,400);
+  assert.equal((await db.query('select 1 from auth.users where email=$1',[email])).rowCount,0);
+  const good = await post('invite',{...fields,location:branch},owner);
+  assert.equal(good.status,200,good.status===200?'':await good.text());
+  const {rows:[created]} = await db.query('select id from auth.users where email=$1',[email]);
+  assert.ok(created);
+  const failedAgain = await post('invite',fields,owner);
+  assert.equal(failedAgain.status,400);
+  const {rows:[existing]} = await db.query('select id from auth.users where email=$1',[email]);
+  assert.equal(existing.id,created.id);
 });
 
 test('manager-only invitations and branch isolation', async () => {
