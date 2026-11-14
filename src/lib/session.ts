@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import type { NextResponse } from 'next/server';
 import { cache } from 'react';
 import { makeAuthClient } from '../../local/auth-client.mjs';
-import { appOrigin, authSecret, authUrl, sessionKey } from './config';
+import { appOrigin, authSecret, authUrl, isAuthConfigured, isDatabaseConfigured, sessionKey } from './config';
 import { database, hasManagerAccess, transaction } from './db';
 
 export const cookieName = 'sam_session';
@@ -99,7 +99,7 @@ async function refresh(hash: string): Promise<StoredSession | null> {
 }
 
 export async function identify(value: string | undefined): Promise<WebUser | null> {
-  if (!validToken(value)) return null;
+  if (!validToken(value) || !isDatabaseConfigured() || !isAuthConfigured()) return null;
   const hash = digest(value);
   const { rows } = await database().query<StoredSession>(sessionSql, [hash]);
   if (!rows[0]) return null;
@@ -114,7 +114,10 @@ export async function identify(value: string | undefined): Promise<WebUser | nul
   return { id: row.user_id, email: data.user.email ?? row.email };
 }
 
-export const currentUser = cache(async () => identify((await cookies()).get(cookieName)?.value));
+export const currentUser = cache(async () => {
+  const store = await cookies();
+  return identify(store.get(cookieName)?.value);
+});
 
 export async function removeSession(value: string | undefined, device?:string): Promise<void> {
   if (!validToken(value)) return;

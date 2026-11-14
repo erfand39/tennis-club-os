@@ -10,6 +10,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   if (await currentUser()) redirect('/club');
   const configured = await isConfigured();
   const { error } = await searchParams;
+  if (configured === null) return <AccessShell>
+    <h1>سامانه در دسترس نیست</h1>
+    <p>اتصال پایگاه داده را بررسی کنید و دوباره تلاش کنید.</p>
+  </AccessShell>;
   return <AccessShell>
     <div className="access-heading">
       <h1>{configured ? 'ورود به پنل باشگاه' : 'راه‌اندازی باشگاه'}</h1>
@@ -20,7 +24,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       {!configured && <label className="field"><span>کد نصب</span><input name="code" dir="ltr" required maxLength={100} autoComplete="off" />
         <small>از دستور <code dir="ltr">./scripts/local.sh setup-code</code> استفاده کنید.</small></label>}
       {!configured && <label className="field"><span>نام نمایشی مالک</span><input name="name" required maxLength={120} autoComplete="name" /></label>}
-      <label className="field"><span>ایمیل</span><input type="email" name="email" dir="ltr" required maxLength={254} autoComplete="username" /></label>
+      <label className="field"><span>ایمیل</span><input type="email" name="email" dir="ltr" required maxLength={254}
+        autoComplete="username" /></label>
       <label className="field"><span>گذرواژه</span><input type="password" name="password" dir="ltr" required
         minLength={configured ? undefined : 12} autoComplete={configured ? 'current-password' : 'new-password'} /></label>
       {!configured && <label className="field"><span>منطقهٔ زمانی شعبه</span><input name="timezone" dir="ltr" required defaultValue="Asia/Tehran" maxLength={80} /></label>}

@@ -1,4 +1,4 @@
-import { asciiDigits,faNumber } from './resource-fields';
+import { asciiDigits,faNumber } from './resource-fields.ts';
 
 export const maximumMinor=9999999999999n;
 export function parseMinor(value:string,unit:string,currency:string):bigint|null {
@@ -9,6 +9,11 @@ export function parseMinor(value:string,unit:string,currency:string):bigint|null
   return amount<=maximumMinor ? amount : null;
 }
 export const currencyLabel=(currency:string)=>currency==='IRR'?'ریال':currency;
+export function formatMinorParts(amount:string|bigint,currency:string) {
+  const formatted=faNumber.format(BigInt(amount));
+  const unit=currencyLabel(currency);
+  return { formatted, unit, full: `${formatted} ${unit}` };
+}
 export function formatMinor(amount:string|bigint,currency:string) {
-  return `${faNumber.format(BigInt(amount))} ${currencyLabel(currency)}`;
+  return formatMinorParts(amount,currency).full;
 }

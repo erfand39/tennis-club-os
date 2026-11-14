@@ -1,10 +1,13 @@
 import 'server-only';
 import pg, { type PoolClient } from 'pg';
-import { databaseUrl } from './config';
+import { databaseUrl, isDatabaseConfigured } from './config';
 
 let pool: pg.Pool | undefined;
 
 export function database(): pg.Pool {
+  if (!isDatabaseConfigured()) {
+    throw new Error('Local PostgreSQL is not configured.');
+  }
   if (!pool) {
     pool = new pg.Pool({ connectionString: databaseUrl(), max: 10, connectionTimeoutMillis: 4000, statement_timeout: 12000 });
     pool.on('error', () => console.warn('Local PostgreSQL connection closed.'));
@@ -34,17 +37,30 @@ export function asUser<T>(userId: string, work: (client: PoolClient) => Promise<
       JSON.stringify({ sub: userId, role: 'authenticated' }),
     ]);
     return work(client);
-  },consistentRead);
+  }, consistentRead);
 }
 
-export async function isConfigured(): Promise<boolean> {
-  const { rows } = await database().query<{ configured: boolean }>('select tennis_runtime.is_configured() as configured');
-  return rows[0].configured;
+export async function isConfigured(): Promise<boolean | null> {
+  if (!isDatabaseConfigured()) return null;
+  try {
+    const { rows } = await database().query<{ configured: boolean }>('select tennis_runtime.is_configured() as configured');
+    return rows[0]?.configured ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export function hasManagerAccess(userId: string): Promise<boolean> {
-  return asUser(userId, async client => (await client.query<{ allowed: boolean }>(`
-    select exists (select from public.organization_members
-      where user_id=$1 and active and role in ('owner','admin')) as allowed
-  `, [userId])).rows[0].allowed);
+export async function hasManagerAccess(userId: string): Promise<boolean> {
+  if (!isDatabaseConfigured()) return false;
+  try {
+    return await asUser(userId, async client => {
+      const { rows } = await client.query<{ allowed: boolean }>(`
+        select exists (select from public.organization_members
+          where user_id=$1 and active and role in ('owner','admin')) as allowed
+      `, [userId]);
+      return Boolean(rows[0]?.allowed);
+    });
+  } catch {
+    return false;
+  }
 }

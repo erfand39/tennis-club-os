@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import './globals.css';
 import { PwaStatus } from './pwa-status';
 
@@ -15,5 +16,15 @@ export const metadata: Metadata = {
 export const viewport:Viewport={width:'device-width',initialScale:1,viewportFit:'cover',themeColor:'#174c3c'};
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <html lang="fa" dir="rtl"><body><PwaStatus />{children}</body></html>;
+  return (
+    <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body>
+        <PwaStatus />
+        {children}
+      </body>
+    </html>
+  );
 }

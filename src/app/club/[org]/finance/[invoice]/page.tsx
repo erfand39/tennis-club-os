@@ -6,9 +6,12 @@ import { branches,uuid } from '@/lib/club';
 import { financeInvoice } from '@/lib/finance';
 import { financePath,paymentMethods } from '@/lib/finance-fields';
 import { errorMessage } from '@/lib/messages';
-import { formatMinor } from '@/lib/money';
-import { bookingKinds,persianDate } from '@/lib/resource-fields';
+import { buildFinanceLedgerCsvData } from '@/lib/csv';
+import { currencyLabel,formatMinor } from '@/lib/money';
+import { MoneyText } from '@/components/money-text';
+import { asciiDigits,bookingKinds,persianDate } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
+import { CsvDownloadButton } from '@/components/csv-download-button';
 import { AmountFields,FinanceActions,FinanceForm } from '../actions';
 import { InvoiceStatus } from '../status';
 
@@ -28,6 +31,26 @@ export default async function InvoicePage({params,searchParams}:{
   const active=detail.status!=='voided';
   const problem=typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
   const localTime=(date:Date)=>persianDate(date,branch.timezone,true);
+  const ledgerCsv=buildFinanceLedgerCsvData(
+    payments.map(payment=>({
+      id:payment.id,
+      methodLabel:paymentMethods[payment.method],
+      amount:payment.amount,
+      available:payment.available,
+      reference:payment.reference,
+      effectiveAtLabel:localTime(payment.effective_at),
+    })),
+    refunds.map(refund=>({
+      paymentId:refund.payment_id,
+      amount:refund.amount,
+      reason:refund.reason,
+      effectiveAtLabel:localTime(refund.effective_at),
+    })),
+    {
+      invoiceNumber:asciiDigits(detail.invoice_number),
+      currencyLabel:currencyLabel(currency),
+    },
+  );
   return <>
     <Link className="panel-link" href={financePath(org,undefined,{branch:branch.id})}>› بازگشت به امور مالی</Link>
     <header className="local-heading directory-heading"><div><h1>فاکتور {numberFa.format(BigInt(detail.invoice_number))}</h1>
@@ -39,7 +62,7 @@ export default async function InvoicePage({params,searchParams}:{
       {([
         ['مبلغ فاکتور',detail.total],['تخفیف',detail.discount],['دریافتی خالص',detail.received],['ماندهٔ فاکتور',detail.due],
       ]).map(([title,value])=><article className="stat-card" key={title}><span className="stat-top">{title}</span>
-        <strong className="stat-value">{amount(value)}</strong></article>)}
+        <strong className="stat-value"><MoneyText amount={value} currency={currency} /></strong></article>)}
     </section>
     <FinanceActions user={user.id} org={org} branch={branch.id} subject={{invoice}}>
       <div className="calendar-detail">
@@ -50,7 +73,7 @@ export default async function InvoicePage({params,searchParams}:{
               : item.package_id && <Link className="panel-link" href={operationsPath(org,branch.id,'packages',{package:item.package_id})}>{item.package_title ?? 'بستهٔ آموزشی'}</Link>}
               <small>{item.starts_at ? localTime(item.starts_at) : ''}{item.name ? (item.starts_at?' · ':'')+item.name : ''}</small>
               {item.status==='cancelled' && <small>سانس لغوشده</small>}</span>
-            <strong>{amount(item.amount)}</strong>
+            <strong><MoneyText amount={item.amount} currency={currency} /></strong>
           </li>)}</ul>
           {detail.discount_reason && <p>علت تخفیف · {detail.discount_reason}</p>}
           {detail.voided_at && <p>ابطال در {localTime(detail.voided_at)} · {detail.void_reason}</p>}
@@ -74,7 +97,16 @@ export default async function InvoicePage({params,searchParams}:{
           </details>}
         </section>
         <section className="panel local-panel">
-          <h2>گردش دریافت و بازپرداخت</h2>
+          <div className="calendar-section-title table-section-head">
+            <h2>گردش دریافت و بازپرداخت</h2>
+            <CsvDownloadButton
+              filename={`finance-ledger-${asciiDigits(detail.invoice_number)}.csv`}
+              headers={ledgerCsv.headers}
+              rows={ledgerCsv.rows}
+              label="دانلود CSV"
+              ariaLabel="دانلود گردش دریافت و بازپرداخت فاکتور با فرمت CSV"
+            />
+          </div>
           {!payments.length && <p>هنوز دریافتی برای این فاکتور ثبت نشده است.</p>}
           <ul className="resource-list finance-ledger">{payments.map(payment=>{
             const linked=refunds.filter(refund=>refund.payment_id===payment.id);
@@ -82,11 +114,11 @@ export default async function InvoicePage({params,searchParams}:{
               <div className="finance-movement">
                 <div><strong>دریافت {paymentMethods[payment.method]}</strong><small>{localTime(payment.effective_at)}</small>
                   {payment.reference && <small>پیگیری · {payment.reference}</small>}</div>
-                <strong>{amount(payment.amount)}</strong>
+                <strong><MoneyText amount={payment.amount} currency={currency} /></strong>
               </div>
               {!!linked.length && <ul className="resource-timeline finance-refunds">
                 {linked.map(refund=><li key={refund.id}><span><strong>بازپرداخت</strong>
-                  <small>{localTime(refund.effective_at)} · {refund.reason}</small></span><strong>{amount(refund.amount)}</strong></li>)}
+                  <small>{localTime(refund.effective_at)} · {refund.reason}</small></span><strong><MoneyText amount={refund.amount} currency={currency} /></strong></li>)}
               </ul>}
               {active && payment.available!=='0' && <details className="resource-disclosure">
                 <summary>ثبت بازپرداخت</summary>

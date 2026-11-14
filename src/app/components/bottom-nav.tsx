@@ -9,12 +9,13 @@ import { resourcePath } from '@/lib/resource-fields';
 
 export interface BottomNavProps {
   org: string;
+  tools?: React.ReactNode;
   userName?: string;
   roleTitle?: string;
   isOwner?: boolean;
 }
 
-export function BottomNav({ org, userName, roleTitle, isOwner }: BottomNavProps) {
+export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNavProps) {
   const pathname = usePathname();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -162,6 +163,7 @@ export function BottomNav({ org, userName, roleTitle, isOwner }: BottomNavProps)
             </div>
           </div>
 
+          {tools}
           <nav className="mobile-drawer-nav" aria-label="بخش‌های بیشتر سامانه">
             <div className="drawer-group">
               <span className="drawer-group-label">امکانات اصلی</span>
