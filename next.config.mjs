@@ -1,18 +1,30 @@
+import path from 'node:path';
+
 /** @type {import('next').NextConfig} */
 const config = {
   poweredByHeader: false,
+  outputFileTracingRoot: path.resolve(import.meta.dirname),
   async headers() {
-    return [{
-      source: '/:path*',
-      headers: [
-        { key: 'X-Content-Type-Options', value: 'nosniff' },
-        { key: 'X-Frame-Options', value: 'DENY' },
-        { key: 'Referrer-Policy', value: 'no-referrer' },
-      ],
-    }, {
-      source: '/:path((?!_next/static/).*)',
-      headers: [{key:'Cache-Control',value:'private, no-store'}],
-    }];
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
+      {
+        source: '/:path((?!_next/static/).*)',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
+        source: '/:path*\\.(woff2|webp|svg)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
   },
 };
 

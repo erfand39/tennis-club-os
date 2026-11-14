@@ -22,7 +22,7 @@ export default async function Details({ params, searchParams }: {
   const label = resourceKinds[kind].label;
   const [scope,feedback] = await Promise.all([branches(user.id,org),searchParams]);
   const base = resourcePath(org,kind);
-  const back = <Link href={base} className="panel-link">‹ بازگشت به {resourceKinds[kind].title}</Link>;
+  const back = <Link href={base} className="panel-link">› بازگشت به {resourceKinds[kind].title}</Link>;
   if (id === 'new') {
     const options = kind === 'coaches' ? (await availableCourts(user.id,org)).options : undefined;
     return <>
@@ -68,6 +68,33 @@ export default async function Details({ params, searchParams }: {
         <strong className="resource-date-stat">{persianDate(row.updated_at,primaryBranch?.timezone)}</strong>
         {row.data.joined_on && <p>از {persianDate(row.data.joined_on)}</p>}</div>
     </div>
+    {kind === 'students' && (
+      <section className="panel local-panel student-financial-summary">
+        <h2>وضعیت مالی و بسته‌های آموزشی</h2>
+        {row.data.packages?.length ? (
+          <div className="student-packages" style={{ display: 'grid', gap: '8px', margin: '10px 0' }}>
+            {row.data.packages.map((pkg: any, idx: number) => (
+              <div key={idx} className="package-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>{pkg.title}</strong>
+                <span>{faNumber.format(pkg.remaining)} از {faNumber.format(pkg.total)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>بدون بسته آموزشی فعال</p>
+        )}
+        <div className="student-debt-status" style={{ marginTop: '12px' }}>
+          {row.data.debt && row.data.debt > 0 ? (
+            <p>
+              بدهی جاری: <strong>{faNumber.format(row.data.debt)} ریال</strong> —{' '}
+              <Link className="panel-link" href={`/club/${org}/finance`}>پرداخت بدهی</Link>
+            </p>
+          ) : (
+            <span className="local-label">حساب تسویه</span>
+          )}
+        </div>
+      </section>
+    )}
     <section className="panel local-panel resource-editor">
       <div className="resource-section-head"><h2>مشخصات پرونده</h2><a href="#resource-calendar" className="panel-link">مشاهدهٔ برنامه و سوابق</a></div>
       {row.data.amenities?.length ? <p>امکانات: {row.data.amenities.join('، ')}</p> : null}

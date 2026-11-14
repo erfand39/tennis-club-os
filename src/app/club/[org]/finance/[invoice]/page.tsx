@@ -29,7 +29,7 @@ export default async function InvoicePage({params,searchParams}:{
   const problem=typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
   const localTime=(date:Date)=>persianDate(date,branch.timezone,true);
   return <>
-    <Link className="panel-link" href={financePath(org,undefined,{branch:branch.id})}>‹ بازگشت به امور مالی</Link>
+    <Link className="panel-link" href={financePath(org,undefined,{branch:branch.id})}>› بازگشت به امور مالی</Link>
     <header className="local-heading directory-heading"><div><h1>فاکتور {numberFa.format(BigInt(detail.invoice_number))}</h1>
       <p>{branch.name} · {localTime(detail.issued_at)}</p></div><InvoiceStatus status={detail.status} />
     </header>

@@ -1,16 +1,24 @@
 {
   "name": "tennis-club-os",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3030",
     "build": "next build --webpack",
     "start": "next start --hostname 127.0.0.1 --port 3030",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "build:site": "node scripts/build-site.mjs",
     "test:db": "node --test scripts/database.test.mjs",
+    "test:design": "node --test scripts/design-system.test.mjs",
     "test:local": "node --test scripts/local.test.mjs",
     "test:pwa": "node --test scripts/pwa.test.mjs",
-    "test:recovery": "node --test scripts/recovery.test.mjs"
+    "test:recovery": "node --test scripts/recovery.test.mjs",
+    "test:e2e": "node --test 'tests/e2e/**/*.test.mjs'",
+    "test:e2e:t1": "node --test 'tests/e2e/tier1-features/*.test.mjs'",
+    "test:e2e:t2": "node --test 'tests/e2e/tier2-boundaries/*.test.mjs'",
+    "test:e2e:t3": "node --test 'tests/e2e/tier3-combinations/*.test.mjs'",
+    "test:e2e:t4": "node --test 'tests/e2e/tier4-scenarios/*.test.mjs'"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

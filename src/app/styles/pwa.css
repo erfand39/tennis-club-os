@@ -1,51 +1,128 @@
-.pwa-status { display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap;
-  padding:.5rem max(.75rem,env(safe-area-inset-right)) .5rem max(.75rem,env(safe-area-inset-left));
-  background:#f8efd8;color:#422d12;border-bottom:1px solid #e0cc9b;font-size:.88rem; }
-.pwa-status button { min-height:44px;border:1px solid currentColor;background:transparent;color:inherit;border-radius:.6rem;padding:.3rem .8rem;font-weight:700; }
-.pwa-update { background:#e4f1e2;color:#163b2c;border-color:#cadfcb; }
-.pwa-install { display:grid;gap:1rem;width:min(100%,60rem);margin-inline:auto;
-  padding:max(1.2rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1.2rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left)); }
-.pwa-install h1,.pwa-install h2,.pwa-install p { margin:0; }
-.pwa-install .button { justify-self:start; }
-.pwa-platforms { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:.75rem; }
-.pwa-platforms h2,.pwa-install>section h2 { font-size:1.02rem;margin-bottom:.35rem; }
-.pwa-hero { display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:clamp(1rem,4vw,2rem);border-radius:1.1rem;background:#163b2c;color:#fff; }
-.pwa-hero img { border-radius:1rem;border:1px solid #76a78b; }
-.pwa-hero h1 { font-size:clamp(1.3rem,5vw,2rem); }
-.pwa-hero p { color:#e1efdd;margin-top:.2rem; }
-:focus-visible { outline:3px solid #2f6aa7;outline-offset:3px; }
-@media (max-width:840px) {
-  .local-shell { padding-inline:env(safe-area-inset-right) env(safe-area-inset-left);padding-bottom:env(safe-area-inset-bottom); }
-  .local-sidebar { padding-top:max(10px,env(safe-area-inset-top)); }
-  .local-sidebar nav a,.pwa-install .button { min-height:44px;display:inline-flex;align-items:center; }
-  .local-shell input:not([type=checkbox]):not([type=radio]),.local-shell select,.local-shell textarea,
-  .access-shell input:not([type=checkbox]):not([type=radio]),.access-shell select { font-size:max(16px,1em); }
-  .local-content .button { min-height:44px; }
+.pwa-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.6rem max(1rem, env(safe-area-inset-right)) 0.6rem max(1rem, env(safe-area-inset-left));
+  background: #fbf5e6;
+  color: #422d12;
+  border-bottom: 1px solid #ebd7a5;
+  font-size: 0.88rem;
+  font-weight: 650;
+  box-shadow: 0 1px 4px rgba(66, 45, 18, 0.06);
 }
-@media (prefers-reduced-motion:reduce) {
-  *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; }
+.pwa-status button {
+  min-height: 44px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.35rem 0.9rem;
+  font-weight: 750;
+  transition: background var(--motion);
+}
+.pwa-status button:hover { background: rgba(66, 45, 18, 0.08); }
+.pwa-update { background: #e8f5e6; color: #163b2c; border-color: #c0debf; }
+
+/* PWA Install Page */
+.pwa-install {
+  display: grid;
+  gap: 1.2rem;
+  width: min(100%, 62rem);
+  margin-inline: auto;
+  padding: max(1.4rem, env(safe-area-inset-top)) max(1.2rem, env(safe-area-inset-right)) max(1.4rem, env(safe-area-inset-bottom)) max(1.2rem, env(safe-area-inset-left));
+}
+.pwa-install h1, .pwa-install h2, .pwa-install p { margin: 0; }
+.pwa-install .button { justify-self: start; }
+.pwa-platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.pwa-platforms h2, .pwa-install > section h2 { font-size: 1.1rem; font-weight: 850; margin-bottom: 0.4rem; color: var(--deep); }
+.pwa-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  padding: clamp(1.2rem, 4.5vw, 2.2rem);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #103527 0%, #174c3c 100%);
+  color: #fff;
+  box-shadow: 0 10px 28px -4px rgba(16, 53, 39, 0.3);
+}
+.pwa-hero img { border-radius: 14px; border: 1.5px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.pwa-hero h1 { font-size: clamp(1.4rem, 4.5vw, 2.2rem); font-weight: 900; }
+.pwa-hero p { color: #e1efdd; margin-top: 0.3rem; }
+
+@media (max-width: 840px) {
+  .local-shell {
+    padding-inline: env(safe-area-inset-right) env(safe-area-inset-left);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .local-sidebar { padding-top: max(12px, env(safe-area-inset-top)); }
+  .local-sidebar nav a, .pwa-install .button { min-height: 44px; display: inline-flex; align-items: center; }
+  .local-shell input:not([type=checkbox]):not([type=radio]), .local-shell select, .local-shell textarea,
+  .access-shell input:not([type=checkbox]):not([type=radio]), .access-shell select { font-size: max(16px, 1em); }
+  .local-content .button { min-height: 44px; }
 }
 
-.notice-center { display:grid;gap:1rem; }
-.notice-center h2 { font-size:1.05rem;margin:0; }
-.notice-center p { margin:.2rem 0;color:#456052; }
-.notice-device,.notice-tools,.notice-filter,.notice-actions {
-  display:flex;gap:.6rem;align-items:end;flex-wrap:wrap;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-.notice-device,.notice-tools { justify-content:space-between; }
-.notice-device .notice-message { width:100%;font-weight:650; }
-.notice-tools { margin-bottom:.75rem; }
-.notice-filter .field { min-width:min(9rem,100%); }
-.notice-list { list-style:none;padding:0;margin:0;display:grid;gap:.45rem; }
-.notice-list li { display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;
-  border:1px solid #e1e9e0;border-radius:.75rem;padding:.75rem; }
-.notice-list li.notice-unread { border-inline-start:4px solid #467f5c;background:#f4f9f1; }
-.notice-item { min-width:0; }
-.notice-meta,.notice-badge { font-size:.75rem;color:#345145; }
-.notice-badge { display:inline-block;border:1px solid #bfd3be;border-radius:.4rem;padding:0 .4rem; }
-.notice-actions .button { white-space:normal; }
-@media (max-width:520px) {
-  .notice-actions,.notice-tools,.notice-filter { width:100%; }
-  .notice-filter .field,.notice-actions>* { flex:1 1 auto; }
-  .notice-actions form button { width:100%; }
+
+/* Notification Center */
+.notice-center { display: grid; gap: 1.2rem; }
+.notice-center h2 { font-size: 1.15rem; font-weight: 850; margin: 0; color: var(--deep); }
+.notice-center p { margin: 0.25rem 0; color: var(--muted); }
+.notice-device, .notice-tools, .notice-filter, .notice-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.notice-device, .notice-tools { justify-content: space-between; }
+.notice-device .notice-message { width: 100%; font-weight: 700; color: var(--forest); }
+.notice-tools { margin-bottom: 0.85rem; }
+.notice-filter .field { min-width: min(9.5rem, 100%); }
+.notice-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+.notice-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+  background: #ffffff;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--motion), box-shadow var(--motion);
+}
+.notice-list li:hover {
+  transform: translateX(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.notice-list li.notice-unread {
+  border-inline-start: 4.5px solid var(--forest);
+  background: #f4f9f2;
+}
+.notice-item { min-width: 0; }
+.notice-meta, .notice-badge { font-size: 0.78rem; color: var(--muted); }
+.notice-badge {
+  display: inline-block;
+  border: 1px solid #bfd3be;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-weight: 700;
+  background: #f1f8ed;
+  color: var(--forest);
+}
+.notice-actions .button { white-space: normal; }
+
+@media (max-width: 520px) {
+  .notice-actions, .notice-tools, .notice-filter { width: 100%; }
+  .notice-filter .field, .notice-actions > * { flex: 1 1 auto; }
+  .notice-actions form button { width: 100%; }
 }

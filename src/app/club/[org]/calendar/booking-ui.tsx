@@ -3,8 +3,21 @@ import { formatMinor } from '@/lib/money';
 import { branchDateTime } from '@/lib/calendar-dates';
 
 export function BookingStatus({ booking }: { booking: Booking }) {
-  const status = booking.status === 'cancelled' ? 'لغوشده' : booking.session_status === 'completed' ? 'برگزارشده' : 'تأییدشده';
-  return <span className={`resource-status ${booking.status==='cancelled' ? 'is-inactive' : 'is-active'}`}><i />{status}</span>;
+  const isPast = new Date(booking.ends_at).getTime() <= Date.now();
+  const isElapsed = booking.status === 'confirmed' && booking.session_status !== 'completed' && isPast;
+  const status = booking.status === 'cancelled'
+    ? 'لغو شده'
+    : booking.session_status === 'completed'
+    ? 'برگزارشده'
+    : isElapsed
+    ? 'پایان‌یافته'
+    : 'تأییدشده';
+  const statusClass = booking.status === 'cancelled'
+    ? 'is-inactive'
+    : isElapsed
+    ? 'is-elapsed'
+    : 'is-active';
+  return <span className={`resource-status ${statusClass}`}><i />{status}</span>;
 }
 export function LocalTimeRange({ start,end,zone }: { start: Date; end: Date; zone: string }) {
   const a = branchDateTime(zone,start);

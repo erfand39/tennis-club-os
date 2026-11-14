@@ -4,6 +4,7 @@ import { type FormEvent, useRef, useState } from 'react';
 import { type BookingKind, type CalendarCourt } from '@/lib/calendar';
 import { errorMessage } from '@/lib/messages';
 import { bookingKinds } from '@/lib/resource-fields';
+import { JalaliDateTimePicker } from '@/app/components/jalali-datepicker';
 import { displayPrice } from './booking-ui';
 
 type Person = { id: string; name: string };
@@ -65,7 +66,19 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
       <label className="field"><span>نوع سانس</span><select name="kind" value={kind} onChange={event => setKind(event.currentTarget.value as BookingKind)}>
         {Object.entries(bookingKinds).map(([id,name]) => <option key={id} value={id}>{name}</option>)}
       </select></label>
-      <label className="field"><span>شروع به وقت شعبه</span><input type="datetime-local" name="start" min={minStart} dir="ltr" defaultValue={start} required /></label>
+      <div className="field">
+        <JalaliDateTimePicker
+          name="start"
+          defaultValue={start}
+          min={minStart}
+          label="شروع به وقت شعبه"
+          required
+          onChange={() => {
+            setPrice(undefined);
+            setError(undefined);
+          }}
+        />
+      </div>
       <label className="field"><span>مدت به دقیقه</span><input inputMode="numeric" dir="ltr" name="minutes" defaultValue="60" maxLength={4} required /></label>
       {rental ? <label className="field resource-full"><span>نام رزروکننده</span><input name="booker" maxLength={120} required /></label> : <>
         <label className="field"><span>مربی</span><select name="coach" required>

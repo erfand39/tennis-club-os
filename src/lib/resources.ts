@@ -16,6 +16,8 @@ type DetailData = {
   contact_phone?: string | null; contact_email?: string | null; specialty?: string | null; qualification?: string | null;
   skill_level?: string | null; joined_on?: string | null; pay_basis?: 'hourly' | 'per_session' | null;
   pay_amount_minor?: number | null;
+  packages?: { title: string; remaining: number; total: number }[];
+  debt?: number;
 };
 export type ResourceDetail = ResourceRow & { revision: string; locations: string[]; data: DetailData };
 export type ResourceFilters = { q: string; status: string; branch: string; sort: string; page: number; inactiveDays: number };

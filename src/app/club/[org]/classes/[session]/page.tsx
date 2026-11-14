@@ -43,7 +43,7 @@ export default async function ClassPage({params,searchParams}:{
   const problem=typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
 
   return <>
-    <Link className="panel-link" href={classesPath(org,undefined,{branch:branch.id,date:scheduled.date})}>‹ بازگشت به کلاس‌ها</Link>
+    <Link className="panel-link" href={classesPath(org,undefined,{branch:branch.id,date:scheduled.date})}>› بازگشت به کلاس‌ها</Link>
     <header className="local-heading directory-heading"><div><h1>{bookingKinds[session.kind]}</h1><p>{branch.name} · {longDay(scheduled.date)}</p></div>
       <span className={`resource-status ${completed?'is-active':session.status==='cancelled'?'is-inactive':'is-archived'}`}><i />{classStates[session.status]}</span>
     </header>

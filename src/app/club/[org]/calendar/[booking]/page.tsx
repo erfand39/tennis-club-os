@@ -39,7 +39,7 @@ export default async function BookingPage({ params, searchParams }: {
     const start = selected && selected.startsWith(date) && selected>=now.input ? selected
       : date===now.date && now.hour>'08:00' ? now.input : date+'T08:00';
     return <>
-      <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date})}>‹ بازگشت به تقویم</Link>
+      <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date})}>› بازگشت به تقویم</Link>
       <header className="local-heading"><div><h1>رزرو سانس</h1><p>{branch.name} · {longDay(date)}</p></div></header>
       <section className="panel local-panel resource-editor">
         {problem && <p className="local-notice error" role="alert">{problem}</p>}
@@ -63,7 +63,7 @@ export default async function BookingPage({ params, searchParams }: {
   </>;
 
   return <>
-    <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date:detail.local_day})}>‹ بازگشت به تقویم</Link>
+    <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date:detail.local_day})}>› بازگشت به تقویم</Link>
     <header className="local-heading directory-heading"><div><h1>{bookingKinds[detail.kind]}</h1><p>{branch.name} · {longDay(detail.local_day)}</p></div>
       <BookingStatus booking={detail} /></header>
     {filters.saved==='1' && <p className="local-notice" role="status">تغییرات سانس ذخیره شد.</p>}

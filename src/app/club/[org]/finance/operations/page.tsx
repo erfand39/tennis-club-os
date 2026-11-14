@@ -245,7 +245,7 @@ export default async function FinanceOperations({params,searchParams}:{params:Pr
   const problem=typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
   const pageLink=(next:number)=>operationsPath(org,branch.id,tab,{from,to,page:String(next),...session?{session}:{}});
   return <>
-    <Link className="panel-link" href={financePath(org,undefined,{branch:branch.id})}>‹ بازگشت به امور مالی</Link>
+    <Link className="panel-link" href={financePath(org,undefined,{branch:branch.id})}>› بازگشت به امور مالی</Link>
     <header className="local-heading"><div><h1>{operationsTabs[tab]}</h1><p>{branch.name}</p></div></header>
     <nav className="finance-shortcuts finance-operations-nav" aria-label="عملیات مالی باشگاه">
       {Object.entries(operationsTabs).map(([key,title])=><Link key={key} aria-current={key===tab?'page':undefined}
