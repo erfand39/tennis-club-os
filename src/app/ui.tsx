@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { errorMessage } from '@/lib/messages';
+import { AccessSceneSlot } from './access-scene-slot';
+import { AccessCardMotion } from './motion-ui';
 
 export function Brand({ href = '/' }: { href?: string }) {
   return <Link className="local-brand" href={href}><span className="sam-mark" aria-hidden="true" /><span>
@@ -10,8 +12,8 @@ export function Brand({ href = '/' }: { href?: string }) {
 
 export function AccessShell({ children }: { children: ReactNode }) {
   return <main className="access-shell">
-    <section className="access-card"><Brand />{children}</section>
-    <aside className="access-image"><div><strong>باشگاه تنیس سام</strong><p>سامانهٔ مدیریت باشگاه</p></div></aside>
+    <AccessCardMotion className="access-card"><Brand />{children}</AccessCardMotion>
+    <aside className="access-image"><AccessSceneSlot /></aside>
   </main>;
 }
 

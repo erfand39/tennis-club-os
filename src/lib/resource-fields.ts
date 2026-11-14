@@ -5,6 +5,14 @@ export const resourceKinds = {
 } as const;
 export type ResourceKind = keyof typeof resourceKinds;
 export type ResourceStatus = keyof typeof resourceStatuses;
+export type ResourceSearchItem = {
+  id: string;
+  kind: ResourceKind;
+  name: string;
+  status: ResourceStatus;
+  subtitle: string | null;
+  branch_names: string[];
+};
 export const resourceStatuses = { active: 'فعال', inactive: 'غیرفعال', archived: 'آرشیوشده' } as const;
 export const weekdays = [
   [6, 'شنبه'], [7, 'یکشنبه'], [1, 'دوشنبه'], [2, 'سه‌شنبه'], [3, 'چهارشنبه'], [4, 'پنجشنبه'], [5, 'جمعه'],

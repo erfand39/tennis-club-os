@@ -5,7 +5,7 @@ import { operationsPath } from '@/lib/club-finance-fields';
 import { branches } from '@/lib/club';
 import { financeOverview } from '@/lib/finance';
 import { financePath,invoiceStates,type InvoiceState } from '@/lib/finance-fields';
-import { formatMinor } from '@/lib/money';
+import { MoneyText } from '@/components/money-text';
 import { asciiDigits,persianDate } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
 import { InvoiceStatus } from './status';
@@ -60,13 +60,13 @@ export default async function FinancePage({params,searchParams}:{
         ['هزینه در بازه',item.expense],['پرداخت خالص مربیان در بازه',item.coach],['تسویهٔ مصوب پرداخت‌نشده',item.unpaid],
         ['خالص گردش عملیاتی',item.operating],
       ]).map(([label,value])=><article className="stat-card" key={label}><span className="stat-top">{label}</span>
-        <strong className="stat-value">{formatMinor(value,item.currency)}</strong></article>)}
+        <strong className="stat-value"><MoneyText amount={value} currency={item.currency} /></strong></article>)}
     </section>)}
     {data.breakdown.length>0 && <div className="calendar-detail">
       {(['court','coach'] as const).map(kind=><section className="panel local-panel" key={kind}>
         <h2>{kind==='court'?'دریافتی خالص به تفکیک زمین':'دریافتی خالص به تفکیک مربی'}</h2>
         <ul className="resource-timeline">{data.breakdown.filter(item=>item.kind===kind).map(item=>
-          <li key={item.key+item.currency}><span>{item.title}</span><strong>{formatMinor(item.net,item.currency)}</strong></li>)}</ul>
+          <li key={item.key+item.currency}><span>{item.title}</span><strong><MoneyText amount={item.net} currency={item.currency} /></strong></li>)}</ul>
       </section>)}
     </div>}
     <section className="panel local-panel">
@@ -74,8 +74,8 @@ export default async function FinancePage({params,searchParams}:{
       {data.rows.length ? <ul className="resource-list">
         {data.rows.map(item=><li key={item.id}><Link className="calendar-row finance-row" href={financePath(org,item.id)}>
           <span><strong>فاکتور {numberFa.format(BigInt(item.invoice_number))}</strong><small>{persianDate(item.issued_at,branch.timezone)}</small></span>
-          <span><small>مبلغ</small>{formatMinor(item.total,item.currency)}</span>
-          <span><small>مانده</small>{formatMinor(item.due,item.currency)}</span>
+          <span><small>مبلغ</small><MoneyText amount={item.total} currency={item.currency} /></span>
+          <span><small>مانده</small><MoneyText amount={item.due} currency={item.currency} /></span>
           <InvoiceStatus status={item.status} />
         </Link></li>)}
       </ul> : <div className="empty-state"><strong>فاکتوری برای این فیلتر پیدا نشد.</strong></div>}

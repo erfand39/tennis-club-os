@@ -66,7 +66,7 @@ export function markNotices(user:string,org:string,branch:string|null,event:stri
 }
 export const pushPublicKey=()=>pushSettings()?.publicKey??null;
 export async function deviceIsEnabled(device:string|undefined,user:string,org:string) {
-  if (!device||!uuid(device)) return false;
+  if (!device || !uuid(device)) return false;
   const {rowCount}=await database().query('select from tennis_runtime.push_devices where (id,user_id,organization_id)=($1,$2,$3)',[device,user,org]);
   return !!rowCount;
 }

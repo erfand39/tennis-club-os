@@ -2,14 +2,16 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
 import { branchDateTime,calendarPath,longDay,numberFa } from '@/lib/calendar-dates';
+import { buildClassRosterCsvData } from '@/lib/csv';
 import { attendanceStates,classStates,classesPath } from '@/lib/class-fields';
 import { operationsPath } from '@/lib/club-finance-fields';
 import { classDetail } from '@/lib/classes';
 import { branches,uuid } from '@/lib/club';
 import { errorMessage } from '@/lib/messages';
-import { bookingKinds,resourcePath } from '@/lib/resource-fields';
+import { bookingKinds,persianDate,resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
 import { LocalTimeRange } from '../../calendar/booking-ui';
+import { CsvDownloadButton } from '@/components/csv-download-button';
 import { ResourceCommand } from '../../resources/command';
 
 export default async function ClassPage({params,searchParams}:{
@@ -41,6 +43,20 @@ export default async function ClassPage({params,searchParams}:{
   </>;
   const totals=Object.fromEntries(Object.keys(attendanceStates).map(status=>[status,active.filter(item=>item.status===status).length]));
   const problem=typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
+  const rosterCsv=buildClassRosterCsvData(
+    roster.map(item=>({
+      studentName:item.name,
+      withdrawnAtLabel:item.withdrawn_at ? persianDate(item.withdrawn_at,branch.timezone,true) : null,
+      attendanceLabel:item.status ? attendanceStates[item.status] : null,
+    })),
+    {
+      classTitle:bookingKinds[session.kind],
+      branchName:branch.name,
+      coachName:session.coach,
+      courtName:session.court,
+      sessionDateLabel:longDay(scheduled.date),
+    },
+  );
 
   return <>
     <Link className="panel-link" href={classesPath(org,undefined,{branch:branch.id,date:scheduled.date})}>› بازگشت به کلاس‌ها</Link>
@@ -70,7 +86,16 @@ export default async function ClassPage({params,searchParams}:{
     </section>}
     <div className="calendar-detail">
       <section className="panel local-panel">
-        <h2>شاگردان کلاس</h2>
+        <div className="calendar-section-title table-section-head">
+          <h2>شاگردان کلاس</h2>
+          <CsvDownloadButton
+            filename={`class-roster-${scheduled.date}-${id.slice(0,8)}.csv`}
+            headers={rosterCsv.headers}
+            rows={rosterCsv.rows}
+            label="دانلود CSV"
+            ariaLabel="دانلود فهرست شاگردان کلاس با فرمت CSV"
+          />
+        </div>
         {active.length ? <ul className="resource-list class-roster">{active.map(item=><li key={item.id}>
           <div className="class-roster-row">
             <Link className="panel-link" href={resourcePath(org,'students',item.student_id)}>{item.name ?? 'پروندهٔ شاگرد'}</Link>

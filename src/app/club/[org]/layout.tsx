@@ -6,6 +6,9 @@ import { resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
 import { Brand, Logout } from '../../ui';
 import { ClubNav } from './nav';
+import { ClubSearch } from './search';
+import { ClubPageMotion } from '../../motion-ui';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { BottomNav } from '@/app/components/bottom-nav';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +38,7 @@ export default async function ClubLayout({ children, params }: { children: React
 
     <aside className="local-sidebar">
       <Brand href={`/club/${org}`} />
+      <ClubSearch org={org} />
       <ClubNav links={[
         { href: `/club/${org}`, label: 'نمای کلی', icon: 'court' },
         { href: `/club/${org}/calendar`, label: 'تقویم سانس‌ها', icon: 'calendar' },
@@ -48,15 +52,17 @@ export default async function ClubLayout({ children, params }: { children: React
         ...(club.role === 'owner' ? [{ href: `/club/${org}/members`, label: 'مدیران و دسترسی', icon: 'users' as const }] : []),
         { href: `/club/${org}/profile`, label: 'پروفایل من', icon: 'user' },
       ]} />
+      <ThemeToggle />
       <div className="local-account"><strong>{name || 'حساب باشگاه'}</strong><small>{roles[club.role]}</small><Logout /></div>
     </aside>
 
-    <main className="local-content">{children}</main>
+    <main className="local-content"><ClubPageMotion>{children}</ClubPageMotion></main>
 
     <BottomNav
       org={org}
       userName={name || 'حساب باشگاه'}
       roleTitle={roles[club.role]}
+      tools={<><ClubSearch org={org} /><ThemeToggle /></>}
       isOwner={club.role === 'owner'}
     />
   </div>;

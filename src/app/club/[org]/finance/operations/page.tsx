@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
 import { branchDateTime,numberFa,periodDates,validCalendarDate } from '@/lib/calendar-dates';
 import { classesPath } from '@/lib/class-fields';
-import { branches,uuid,type Branch } from '@/lib/club';
+import { branches,clubCurrency,uuid,type Branch } from '@/lib/club';
 import { coachFinance,financeExpenses,financeRates,trainingFinance } from '@/lib/club-finance';
 import { coachBases,expenseCategories,operationsPath,operationsTabs,payableStates,type OperationsTab } from '@/lib/club-finance-fields';
-import { asUser } from '@/lib/db';
 import { financePath,paymentMethods } from '@/lib/finance-fields';
 import { errorMessage } from '@/lib/messages';
 import { formatMinor } from '@/lib/money';
+import { MoneyText } from '@/components/money-text';
 import { bookingKinds,minutesLabel,persianDate,weekdays } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
 import { AmountFields,FinanceActions,FinanceForm } from '../actions';
@@ -112,7 +112,7 @@ function Expenses({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof finan
       <ul className="resource-list">{data.rows.map(item=><li className="operations-row" key={item.id}>
         <div className="calendar-section-title"><div><strong>{item.title}</strong>
           <small>{expenseCategories[item.category]} · {persianDate(item.effective_on)} · {paymentMethods[item.method]}</small></div>
-          <strong>{formatMinor(item.amount,item.currency)}</strong></div>
+          <strong><MoneyText amount={item.amount} currency={item.currency} /></strong></div>
         {item.voided_at ? <p>باطل‌شده · {item.void_reason}</p> : <details className="resource-disclosure"><summary>ابطال هزینه</summary>
           <FinanceForm command="finance-expense-void" label="تأیید ابطال" danger><Target id={item.id} /><Reason title="علت ابطال" /></FinanceForm>
         </details>}
@@ -160,7 +160,7 @@ function Settlements({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof co
         </details>}
         {corrections.length>0 && <ul className="resource-timeline">
           {corrections.map(entry=><li key={entry.id}><span>{entry.reason}<small>{persianDate(entry.effective_at,scope.branch.timezone)}</small></span>
-            <strong>{formatMinor(entry.delta,item.currency)}</strong></li>)}
+            <strong><MoneyText amount={entry.delta} currency={item.currency} /></strong></li>)}
         </ul>}
       </li>;
     })}</ul>
@@ -194,7 +194,7 @@ function Rates({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof financeR
         <ul className="resource-timeline">{data.specials.filter(rate=>rate.rate_id===item.id).map(rate=><li key={rate.id}>
           <span>{weekdays.find(([day])=>day===rate.weekday)?.[1]} · <bdi>{minutesLabel(rate.start_minute)}–{minutesLabel(rate.end_minute)}</bdi>
             <small>{numberFa.format(rate.min_minutes)} تا {numberFa.format(rate.max_minutes)} دقیقه</small></span>
-          <strong>{formatMinor(rate.amount,scope.currency)}</strong>
+          <strong><MoneyText amount={rate.amount} currency={scope.currency} /></strong>
           {rate.retired_at ? <span className="local-label">غیرفعال</span> : <details className="resource-disclosure">
             <summary>غیرفعال‌کردن</summary><FinanceForm command="finance-rate-retire" label="تأیید غیرفعال‌سازی">
               <Target id={rate.id} /><Reason />
@@ -219,9 +219,9 @@ export default async function FinanceOperations({params,searchParams}:{params:Pr
   const from=typeof filters.from==='string' && validCalendarDate(filters.from) ? filters.from : periodDates(today,'month').start;
   const to=typeof filters.to==='string' && validCalendarDate(filters.to) ? filters.to : today;
   const page=typeof filters.page==='string' && /^\d{1,5}$/.test(filters.page) ? Math.max(1,Number(filters.page)) : 1;
-  const {rows:[club]}=await asUser(user.id,db=>db.query<{currency:string}>('select currency from public.organizations where id=$1',[org]));
-  if (!club) notFound();
-  const scope={org,branch,currency:club.currency,today};
+  const currency=await clubCurrency(user.id,org);
+  if (!currency) notFound();
+  const scope={org,branch,currency,today};
   let content;
   let hasNext=false;
   if (tab==='packages') {

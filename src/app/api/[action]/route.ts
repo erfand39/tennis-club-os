@@ -1,7 +1,7 @@
 import { randomUUID,timingSafeEqual } from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
-import { appOrigin, authUrl, setupCode } from '@/lib/config';
-import { asUser, database, hasManagerAccess, isConfigured } from '@/lib/db';
+import { appOrigin, authUrl, isAuthConfigured, isDatabaseConfigured, setupCode } from '@/lib/config';
+import { asUser, database, hasManagerAccess } from '@/lib/db';
 import { clubFor, members, uuid } from '@/lib/club';
 import { type ClubRole, roles } from '@/lib/roles';
 import { isBookingAction, runBookingAction } from '@/lib/booking-commands';
@@ -14,6 +14,7 @@ import { InputError } from '@/lib/input';
 import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCookie } from '@/lib/notifications';
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
 import { isResourceKind, resourcePath } from '@/lib/resource-fields';
+import { searchResources } from '@/lib/resources';
 import {
   adminAuth, clearSessionCookie, cookieName, createWebSession, identify, publicAuth, removeSession, setSessionCookie,
 } from '@/lib/session';
@@ -21,8 +22,18 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function go(path: string, problem?: string): NextResponse {
-  const url = new URL(path, appOrigin());
+function requestOrigin(request?: NextRequest): string {
+  if (process.env.SAM_ORIGIN || !request) return appOrigin();
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (host) {
+    const proto = request.headers.get('x-forwarded-proto')?.split(',')[0].trim() || (request.url.startsWith('https:') ? 'https' : 'http');
+    return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
+}
+
+function go(path: string, problem?: string, request?: NextRequest): NextResponse {
+  const url = new URL(path, requestOrigin(request));
   if (problem) url.searchParams.set('error', problem);
   return NextResponse.redirect(url, 303);
 }
@@ -34,9 +45,10 @@ function equalSecret(left: string, right: string): boolean {
 }
 
 function hasTrustedOrigin(request: NextRequest): boolean {
-  const expected = appOrigin();
+  const expected = requestOrigin(request);
   const origin = request.headers.get('origin');
   if (origin === expected) return true;
+  if (!process.env.SAM_ORIGIN && !origin && request.headers.get('sec-fetch-site') === 'same-origin') return true;
   if (origin !== 'null') return false;
 
   // Safari can serialize an opaque document origin as "null" on form navigation.
@@ -102,6 +114,7 @@ function accessOf(values: URLSearchParams) {
 }
 
 async function signIn(email: string, password: string) {
+  if (!isDatabaseConfigured() || !isAuthConfigured()) throw new InputError('unavailable', 503);
   const { data, error } = await publicAuth().signInWithPassword({ email, password });
   if (error || !data.session) {
     if (error?.status === 429) throw new InputError('rate', 429);
@@ -117,14 +130,37 @@ function redeemUrl(mode: 'invite' | 'recovery', token: string): string {
   return link.toString();
 }
 
-export async function GET(_: NextRequest, context: { params: Promise<{ action: string }> }) {
-  if ((await context.params).action !== 'health') return NextResponse.json({ ok: false }, { status: 404 });
-  try {
-    const [, auth] = await Promise.all([isConfigured(), fetch(new URL('/health', authUrl()), { cache: 'no-store', signal: AbortSignal.timeout(3000) })]);
-    return NextResponse.json({ ok: auth.ok }, { status: auth.ok ? 200 : 503 });
-  } catch {
-    return NextResponse.json({ ok: false }, { status: 503 });
+export async function GET(request: NextRequest, context: { params: Promise<{ action: string }> }) {
+  const { action } = await context.params;
+  if (action === 'health') {
+    if (!isDatabaseConfigured() || !isAuthConfigured()) {
+      return NextResponse.json({ ok: false }, { status: 503 });
+    }
+    try {
+      const [, auth] = await Promise.all([
+        database().query('select tennis_runtime.is_configured() as configured'),
+        fetch(new URL('/health', authUrl()), { cache: 'no-store', signal: AbortSignal.timeout(3000) }),
+      ]);
+      return NextResponse.json({ ok: auth.ok }, { status: auth.ok ? 200 : 503 });
+    } catch {
+      return NextResponse.json({ ok: false }, { status: 503 });
+    }
   }
+  if (action === 'resource-search') {
+    const user = await identify(request.cookies.get(cookieName)?.value);
+    if (!user) return NextResponse.json({ error: 'session' }, { status: 401 });
+    const org = request.nextUrl.searchParams.get('org') ?? '';
+    if (!uuid(org) || !(await clubFor(user.id, org))) return NextResponse.json({ error: 'denied' }, { status: 403 });
+    const q = (request.nextUrl.searchParams.get('q') ?? '').trim().slice(0, 100);
+    if (!q) return NextResponse.json({ results: [] });
+    try {
+      const results = await searchResources(user.id, org, q);
+      return NextResponse.json({ results });
+    } catch {
+      return NextResponse.json({ error: 'unavailable' }, { status: 503 });
+    }
+  }
+  return NextResponse.json({ ok: false }, { status: 404 });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ action: string }> }) {
@@ -139,7 +175,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     if (action === 'logout') {
       const device=request.cookies.get(pushCookie)?.value;
       await removeSession(currentToken,device&&uuid(device)?device:undefined);
-      const response = go('/');
+      const response = go('/', undefined, request);
       clearSessionCookie(response);
       setPushCookie(response,'',0);
       return response;
@@ -147,12 +183,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     if (action === 'login') {
       const session = await signIn(emailOf(fields), passwordOf(fields, false));
       if (!(await hasManagerAccess(session.user.id))) throw new InputError('manager-only', 403);
-      const response = go('/club');
+      const response = go('/club', undefined, request);
       setSessionCookie(response, await createWebSession(session, currentToken));
       return response;
     }
     if (action === 'setup') {
-      if (await isConfigured()) throw new InputError('setup-done', 409);
+      if (!isDatabaseConfigured() || !isAuthConfigured()) throw new InputError('unavailable', 503);
+      const { rows: [cfg] } = await database().query<{ configured: boolean }>('select tennis_runtime.is_configured() as configured');
+      if (cfg?.configured) throw new InputError('setup-done', 409);
       if (!equalSecret(fields.get('code') ?? '', setupCode())) throw new InputError('setup-code', 403);
       const email = emailOf(fields);
       const password = passwordOf(fields);
@@ -166,11 +204,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const session = await signIn(email, password);
       const { rows } = await database().query<{ id: string }>(
         'select tennis_runtime.bootstrap_club($1,$2,$3) as id', [session.user.id, name, timezone]);
-      const response = go(`/club/${rows[0].id}`);
+      const response = go(`/club/${rows[0].id}`, undefined, request);
       setSessionCookie(response, await createWebSession(session, currentToken));
       return response;
     }
     if (action === 'redeem') {
+      if (!isDatabaseConfigured() || !isAuthConfigured()) throw new InputError('unavailable', 503);
       const mode = fields.get('mode');
       if (mode !== 'invite' && mode !== 'recovery') throw new InputError('link');
       errorPath = `/redeem?mode=${mode}`;
@@ -185,7 +224,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       if (changed.error || !changed.data.user) throw new InputError('password-update');
       // Sign in with the new password so the local session uses fresh tokens.
       const session = await signIn(changed.data.user.email ?? '', password);
-      const response = wantsJson ? NextResponse.json({ next: '/club' }) : go('/club');
+      const response = wantsJson ? NextResponse.json({ next: '/club' }) : go('/club', undefined, request);
       setSessionCookie(response, await createWebSession(session, currentToken, true));
       return response;
     }
@@ -201,7 +240,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       errorPath=noticePath(org,branch??undefined);
       const event=fields.get('event')==='all'?null:idOf(fields,'event');
       await markNotices(user.id,org,branch,event);
-      return wantsJson?NextResponse.json({ok:true}):go(errorPath);
+      return wantsJson?NextResponse.json({ok:true}):go(errorPath, undefined, request);
     }
     if (action==='notice-push' || action==='notice-disable') {
       const previous=request.cookies.get(pushCookie)?.value;
@@ -216,33 +255,34 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     if (action === 'profile') {
       errorPath = `/club/${org}/profile`;
-      await asUser(user.id, db => db.query('select public.update_my_profile($1)', [nameOf(fields)]));
-      return go(`${errorPath}?saved=1`);
+      const name = nameOf(fields);
+      await asUser(user.id, db => db.query('select public.update_my_profile($1)', [name]));
+      return go(`${errorPath}?saved=1`, undefined, request);
     }
     if (action === 'leave') {
       errorPath = `/club/${org}/profile`;
       await asUser(user.id, db => db.query('select public.leave_club($1)', [org]));
-      return go('/club');
+      return go('/club', undefined, request);
     }
     if (isFinanceAction(action)) {
       const invoice=fields.get('invoice') ?? '';
       const booking=fields.get('booking') ?? '';
       errorPath=action==='finance-issue' && uuid(booking) ? calendarPath(org,{booking}) : financePath(org,uuid(invoice)?invoice:undefined);
       const result=await runFinanceAction(action,fields,user.id,org);
-      return !wantsJson && result.next ? go(result.next) : NextResponse.json(result);
+      return !wantsJson && result.next ? go(result.next, undefined, request) : NextResponse.json(result);
     }
     if (isClassAction(action)) {
       const session = fields.get('session') ?? '';
       errorPath = classesPath(org,uuid(session) ? session : undefined);
       const next = await runClassAction(action,fields,user.id,org);
-      return wantsJson ? NextResponse.json({ next }) : go(next);
+      return wantsJson ? NextResponse.json({ next }) : go(next, undefined, request);
     }
     if (isBookingAction(action)) {
       const booking = fields.get('booking') ?? '';
       const branch = fields.get('branch') ?? '';
       errorPath = calendarPath(org, { booking: uuid(booking) ? booking : 'new', branch: uuid(branch) ? branch : undefined });
       const result = await runBookingAction(action,fields,user.id,org);
-      return !wantsJson && result.next ? go(result.next) : NextResponse.json(result);
+      return !wantsJson && result.next ? go(result.next, undefined, request) : NextResponse.json(result);
     }
     if (isResourceCommand(action)) {
       const kind = fields.get('kind') ?? '';
@@ -250,7 +290,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const target = fields.get('id') ?? '';
       errorPath = resourcePath(org, kind, uuid(target) ? target : 'new');
       const next = await runResourceCommand(action, fields, user.id, org);
-      return wantsJson ? NextResponse.json({ next }) : go(next);
+      return wantsJson ? NextResponse.json({ next }) : go(next, undefined, request);
     }
     if (club.role !== 'owner') throw new InputError('denied', 403);
     errorPath = `/club/${org}/members`;
@@ -260,7 +300,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       const access = accessOf(fields);
       await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5)',
         [org, target, access.role, access.active, access.locations]));
-      return go(`${errorPath}?saved=1`);
+      return go(`${errorPath}?saved=1`, undefined, request);
     }
     if (action === 'invite') {
       fields.set('active', 'yes');
@@ -297,7 +337,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       : dbError.code === '23514' || dbError.code?.startsWith('22') ? 'resource-invalid'
       : dbError.code === '40001' || dbError.code === '40P01' ? 'retry' : 'unavailable';
     const status = failure instanceof InputError ? failure.status : code === 'unavailable' ? 503 : code === 'denied' ? 403 : 400;
-    const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code);
+    const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code, request);
     if (code==='unavailable') {
       const trace=randomUUID();
       console.error(JSON.stringify({event:'local_api_unavailable',trace}));

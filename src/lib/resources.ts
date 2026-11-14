@@ -1,6 +1,7 @@
 import 'server-only';
 import { asUser } from './db';
-import { type ResourceKind, type ResourceStatus, asciiDigits, resourceKinds, resourceStatuses } from './resource-fields';
+import { type ResourceKind, type ResourceSearchItem, type ResourceStatus, asciiDigits, resourceKinds, resourceStatuses } from './resource-fields';
+import { normalizeSearchText } from './resource-search';
 import type { Branch } from './club';
 
 export type ResourceRow = {
@@ -96,6 +97,32 @@ export function resourceList(user: string, org: string, kind: ResourceKind, filt
 
 export function resourceDetail(user: string, org: string, kind: ResourceKind, id: string) {
   return asUser(user, async db => (await db.query<ResourceDetail>(`select * from (${base[kind]}) r where id=$2`, [org,id])).rows[0]);
+}
+
+export async function searchResources(user: string, org: string, rawQuery: string, limit = 12): Promise<ResourceSearchItem[]> {
+  const query = normalizeSearchText(rawQuery);
+  if (!query) return [];
+  const cap = Math.max(1, Math.min(limit, 30));
+  return asUser(user, async db => (await db.query<ResourceSearchItem>(`
+    with combined as (
+      select id, 'students'::text as kind, name, status, subtitle, branch_names from (${base.students}) s
+      union all
+      select id, 'coaches'::text as kind, name, status, subtitle, branch_names from (${base.coaches}) c
+      union all
+      select id, 'courts'::text as kind, name, status, subtitle, branch_names from (${base.courts}) t
+    )
+    select id, kind, name, status, subtitle, branch_names
+    from combined
+    where strpos(translate(lower(name),'يك','یک'), $2) > 0
+    order by
+      case status when 'active' then 0 when 'inactive' then 1 else 2 end,
+      case when strpos(translate(lower(name),'يك','یک'), $2) = 1 then 0 else 1 end,
+      strpos(translate(lower(name),'يك','یک'), $2),
+      name,
+      kind,
+      id
+    limit $3
+  `, [org, query, cap])).rows);
 }
 
 export type ResourceEvent = {

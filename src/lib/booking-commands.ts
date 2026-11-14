@@ -103,7 +103,14 @@ export async function runBookingAction(action: BookingAction, form: URLSearchPar
         const reason = action==='booking-cancel' ? (form.get('reason') ?? '').trim() : null;
         if (reason!==null && (!reason || reason.length>250)) throw new InputError('booking-reason');
         await db.query('select public.edit_calendar_booking($1,$2,$3,$4,$5,$6,$7)',[org,branch,booking,revision,start,reason,request]);
-        return { next: calendarPath(org,{ booking }) + '?saved=1' };
+        const next = calendarPath(org,{ booking }) + '?saved=1';
+        if (action === 'booking-cancel') return { ok: true, next };
+        const { rows: [updated] } = await db.query<{ revision: string; starts_at: Date; ends_at: Date }>(
+          'select revision::text, starts_at, ends_at from public.bookings where organization_id=$1 and location_id=$2 and id=$3',
+          [org,branch,booking],
+        );
+        if (!updated) throw new Error('Updated booking could not be read.');
+        return { ok: true, next, ...updated };
       }
       const draft = await readDraft(db,org,branch,form);
       if (action==='booking-quote') {

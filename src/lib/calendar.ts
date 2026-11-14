@@ -9,6 +9,7 @@ export type Booking = {
   id: string; location_id: string; court_id: string; court: string; starts_at: Date; ends_at: Date; timezone: string;
   local_day: string; kind: BookingKind; status: 'confirmed'|'cancelled'; booker_name: string | null;
   coach: string | null; session_id: string|null; session_status: 'scheduled'|'completed'|'cancelled'|null; capacity: number|null;
+  revision: string;
 };
 type CalendarDay = { day: string; confirmed: number; completed: number; cancelled: number };
 type FreeWindow = { court_id: string; start_at: Date; end_at: Date };
@@ -16,7 +17,7 @@ type Person = { id: string; name: string };
 const pageSize = 30;
 const bookingColumns = ` b.id,b.location_id,b.court_id,c.name as court,b.starts_at,b.ends_at,b.timezone,
     timezone($3,b.starts_at)::date::text as local_day,b.kind,b.status,b.booker_name,
-    cp.name as coach,s.id as session_id,s.status as session_status,s.capacity
+    cp.name as coach,s.id as session_id,s.status as session_status,s.capacity,b.revision::text as revision
 `;
 const bookingTables = `
   from public.bookings b
