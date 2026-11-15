@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from './icon';
 import { Logout } from '../ui';
 import { resourcePath } from '@/lib/resource-fields';
@@ -17,6 +17,8 @@ export interface BottomNavProps {
 
 export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNavProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const drawerRef = useRef<HTMLDialogElement>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -24,32 +26,44 @@ export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNa
   // Close drawer when route changes
   useEffect(() => {
     setIsDrawerOpen(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
-  // Handle Escape key and body scroll lock
   useEffect(() => {
-    if (isDrawerOpen) {
-      document.body.style.overflow = 'hidden';
-      closeBtnRef.current?.focus();
-    } else {
-      document.body.style.overflow = '';
-    }
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && isDrawerOpen) {
-        setIsDrawerOpen(false);
-        triggerRef.current?.focus();
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
+    const openSearch = () => setIsDrawerOpen(true);
+    const closeDrawer = () => setIsDrawerOpen(false);
+    const closeOnDesktop = () => { if (window.innerWidth > 840) setIsDrawerOpen(false); };
+    window.addEventListener('sam:open-club-search', openSearch);
+    window.addEventListener('sam:close-club-drawer', closeDrawer);
+    window.addEventListener('resize', closeOnDesktop);
     return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('sam:open-club-search', openSearch);
+      window.removeEventListener('sam:close-club-drawer', closeDrawer);
+      window.removeEventListener('resize', closeOnDesktop);
+    };
+  }, []);
+
+  // showModal supplies a focus trap and inert background; Escape uses onCancel.
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    const drawer = drawerRef.current;
+    const previousOverflow = document.body.style.overflow;
+    drawer?.showModal();
+    document.body.style.overflow = 'hidden';
+    closeBtnRef.current?.focus();
+    return () => {
+      drawer?.close();
+      document.body.style.overflow = previousOverflow;
+      triggerRef.current?.focus();
     };
   }, [isDrawerOpen]);
 
   const navItems = [
+    {
+      href: `/club/${org}`,
+      label: 'میز کار',
+      icon: 'court' as const,
+      active: pathname === `/club/${org}`,
+    },
     {
       href: `/club/${org}/calendar`,
       label: 'تقویم',
@@ -68,17 +82,11 @@ export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNa
       icon: 'credit-card' as const,
       active: pathname.startsWith(`/club/${org}/finance`),
     },
-    {
-      href: resourcePath(org, 'courts'),
-      label: 'امکانات/اعضا',
-      icon: 'court' as const,
-      active: pathname.startsWith(`/club/${org}/resources`),
-    },
   ];
 
   const isMoreActive =
     !navItems.some(item => item.active) &&
-    (pathname === `/club/${org}` ||
+    (pathname.startsWith(`/club/${org}/resources`) ||
       pathname.startsWith(`/club/${org}/reports`) ||
       pathname.startsWith(`/club/${org}/notifications`) ||
       pathname.startsWith(`/club/${org}/members`) ||
@@ -115,18 +123,25 @@ export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNa
       </nav>
 
       {isDrawerOpen && (
-        <div
-          className="mobile-drawer-overlay"
-          onClick={() => {
-            setIsDrawerOpen(false);
-            triggerRef.current?.focus();
+        <dialog
+          ref={drawerRef}
+          onKeyDown={event => {
+            if (event.key !== 'Tab') return;
+            const items = [...event.currentTarget.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]'
+            )].filter(item => item.getClientRects().length > 0);
+            const first = items[0];
+            const last = items.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
           }}
-          aria-hidden="true"
-        />
-      )}
-
-      {isDrawerOpen && (
-        <aside
+          onCancel={event => { event.preventDefault(); setIsDrawerOpen(false); }}
+          onClick={event => { if (event.target === event.currentTarget) setIsDrawerOpen(false); }}
           id="mobile-more-drawer"
           className="mobile-drawer"
           role="dialog"
@@ -134,6 +149,7 @@ export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNa
           aria-label="منوی دسترسی و مدیریت باشگاه"
           tabIndex={-1}
         >
+          <div className="mobile-drawer-content">
           <div className="mobile-drawer-header">
             <div className="mobile-drawer-title">
               <Icon name="menu" size={20} aria-hidden={true} />
@@ -247,7 +263,8 @@ export function BottomNav({ org, userName, roleTitle, isOwner, tools }: BottomNa
           <div className="mobile-drawer-footer">
             <Logout />
           </div>
-        </aside>
+          </div>
+        </dialog>
       )}
     </>
   );

@@ -98,7 +98,7 @@ test('Feature 4: bottom-nav.tsx implements modern mobile bottom navigation bar a
   assert.match(code, /['"]تقویم['"]/, 'Must contain Calendar item');
   assert.match(code, /['"]کلاس‌ها['"]/, 'Must contain Classes item');
   assert.match(code, /['"]امور مالی['"]/, 'Must contain Finance item');
-  assert.match(code, /['"]امکانات\/اعضا['"]/, 'Must contain Resources item');
+  assert.match(code, /['"]میز کار['"]/, 'Must expose dashboard directly on mobile');
   assert.match(code, /بیشتر/, 'Must contain More item');
   assert.match(code, /['"]calendar['"]/, 'Must use calendar icon');
   assert.match(code, /['"]clock['"]/, 'Must use clock icon');
@@ -111,11 +111,11 @@ test('Feature 4: bottom-nav.tsx implements modern mobile bottom navigation bar a
 });
 
 test('Feature 4: club layout.tsx renders mobile header, desktop sidebar, and BottomNav', async () => {
-  const code = await readFile(new URL('../src/app/club/[org]/layout.tsx', import.meta.url), 'utf8');
+  const code = await readFile(new URL('../src/app/club/[org]/club-shell.tsx', import.meta.url), 'utf8');
 
   assert.match(code, /className="mobile-header"/, 'Must include mobile header');
   assert.match(code, /className="mobile-branch-badge"/, 'Must include active branch badge');
-  assert.match(code, /className="mobile-pwa-badge"/, 'Must include PWA status indicator');
+  assert.match(code, /className="skip-link"/, 'Must provide keyboard access to main content');
   assert.match(code, /className="local-sidebar"/, 'Must preserve desktop sidebar');
   assert.match(code, /<BottomNav/, 'Must render BottomNav');
 });

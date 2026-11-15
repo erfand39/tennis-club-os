@@ -83,6 +83,10 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
     onChange={() => { setPrice(undefined); setError(undefined); }}>
     <input type="hidden" name="org" value={org} /><input type="hidden" name="branch" value={branch} />
     <input type="hidden" name="request" value={request} />
+    <ol className="booking-steps" aria-label="مراحل ثبت سانس">
+      <li aria-current={!price ? 'step' : undefined}><span>۱</span>مشخصات سانس</li>
+      <li aria-current={price ? 'step' : undefined}><span>۲</span>بررسی مبلغ و ثبت</li>
+    </ol>
     <fieldset className="resource-form-grid calendar-inputs" disabled={pending}>
       <label className="field"><span>زمین</span><select name="court" defaultValue={court} required>
         {courts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.surface}</option>)}
@@ -113,8 +117,11 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
     {peopleMissing && <p className="local-notice">برای این نوع سانس، پروندهٔ فعال مربی و در تمرین خصوصی پروندهٔ فعال شاگرد را در همین شعبه ثبت کنید.</p>}
     {price && <div className="calendar-quote" role="status"><span>مبلغ سانس</span><strong>{displayPrice(price.amount,price.currency)}</strong></div>}
     {error && <p className="local-notice error" role="alert">{error}</p>}
+    <div className="booking-submit-row">
     <button className="button primary" disabled={pending || peopleMissing}>
-      {pending ? 'در حال بررسی…' : price ? 'تأیید و ثبت سانس' : 'بررسی مبلغ سانس'}
+      {pending ? (price ? 'در حال ثبت…' : 'در حال بررسی…') : price ? 'تأیید و ثبت سانس' : 'بررسی مبلغ سانس'}
     </button>
+    {!price && <small>ابتدا مبلغ را ببینید، سپس ثبت را تأیید کنید.</small>}
+    </div>
   </form>;
 }
