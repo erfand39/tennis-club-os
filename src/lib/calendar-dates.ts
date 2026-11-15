@@ -1,4 +1,5 @@
 import { asciiDigits } from './resource-fields';
+import type { bookingKinds } from './resource-fields';
 
 export const calendarViews = { day: 'روزانه', week: 'هفتگی', month: 'ماهانه' } as const;
 export type CalendarView = keyof typeof calendarViews;
@@ -64,7 +65,10 @@ export function calendarDateTime(value: string): string | null {
   const match = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d$/.exec(normalized);
   return match && validCalendarDate(match[1]) ? normalized : null;
 }
-export function calendarPath(org: string, options: { booking?: string; branch?: string; court?: string; date?: string; view?: CalendarView; start?: string; page?: number } = {}) {
+export function calendarPath(org: string, options: {
+  booking?: string; branch?: string; court?: string; date?: string; view?: CalendarView; start?: string;
+  page?: number; kind?: keyof typeof bookingKinds; student?: string; coach?: string;
+} = {}) {
   const { booking,...filters } = options;
   const query = new URLSearchParams();
   for (const [key,value] of Object.entries(filters)) if (value) query.set(key,String(value));

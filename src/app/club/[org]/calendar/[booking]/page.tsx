@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { branches, uuid } from '@/lib/club';
-import { calendarBooking, calendarBookingOptions, calendarCourts } from '@/lib/calendar';
+import { calendarBooking, calendarBookingOptions, calendarCourts, courtFreeWindows, type BookingKind } from '@/lib/calendar';
 import { branchDateTime, calendarDateTime, calendarPath, longDay, numberFa, validCalendarDate } from '@/lib/calendar-dates';
 import { classesPath } from '@/lib/class-fields';
 import { financePath } from '@/lib/finance-fields';
@@ -14,7 +14,7 @@ import { ResourceCommand } from '../../resources/command';
 import { BookingStatus, displayPrice, LocalTimeRange } from '../booking-ui';
 import { CreateBookingForm } from '../create-form';
 
-type Filters = { branch?: string; court?: string; date?: string; start?: string; saved?: string; error?: string };
+type Filters = { branch?: string; court?: string; date?: string; start?: string; kind?: string; coach?: string; student?: string; saved?: string; error?: string };
 const actionLabels: Record<string,string> = { create_booking:'ثبت سانس', reschedule_booking:'جابه‌جایی سانس', cancel_booking:'لغو سانس' };
 
 export default async function BookingPage({ params, searchParams }: {
@@ -26,25 +26,43 @@ export default async function BookingPage({ params, searchParams }: {
   const scope = await branches(user.id,org);
   const problem = typeof filters.error==='string' ? errorMessage(filters.error) : undefined;
   if (booking==='new') {
-    const branch = filters.branch ? scope.find(item => item.id===filters.branch && item.active) : scope.find(item => item.active);
+    const activeBranches = scope.filter(item => item.active);
+    const branch = filters.branch ? activeBranches.find(item => item.id===filters.branch) : activeBranches[0];
     if (!branch) notFound();
-    const [allCourts,{coaches,students}] = await Promise.all([
-      calendarCourts(user.id,org,branch.id), calendarBookingOptions(user.id,org,branch.id),
-    ]);
-    const courts = allCourts.filter(item => item.status==='active');
-    const court = courts.find(item => item.id===filters.court) ?? courts[0];
     const now = branchDateTime(branch.timezone);
     const date = typeof filters.date==='string' && validCalendarDate(filters.date) && filters.date>=now.date ? filters.date : now.date;
     const selected = typeof filters.start==='string' ? calendarDateTime(filters.start) : null;
-    const start = selected && selected.startsWith(date) && selected>=now.input ? selected
-      : date===now.date && now.hour>'08:00' ? now.input : date+'T08:00';
+    const offeredStart = selected && selected.startsWith(date) && selected>=now.input ? selected : null;
+    const [allCourts,{coaches,students},free] = await Promise.all([
+      calendarCourts(user.id,org,branch.id), calendarBookingOptions(user.id,org,branch.id),
+      offeredStart ? [] : courtFreeWindows(user.id,org,branch,date),
+    ]);
+    const courts = allCourts.filter(item => item.status==='active');
+    const preferred = courts.find(item => item.id===filters.court);
+    const opening = free.find(item => (!preferred || preferred.id===item.court_id) && +item.end_at - +item.start_at>=3600000);
+    const court = preferred ?? courts.find(item => item.id===opening?.court_id) ?? courts[0];
+    const kind = typeof filters.kind==='string' && Object.hasOwn(bookingKinds,filters.kind)
+      ? filters.kind as BookingKind : coaches.length && students.length ? 'private' : 'rental';
+    const coach = coaches.find(person => person.id===filters.coach)?.id;
+    const student = students.find(person => person.id===filters.student)?.id;
+    const start = offeredStart ?? (opening ? branchDateTime(branch.timezone,opening.start_at).input
+      : date===now.date && now.hour>'08:00' ? now.input : date+'T08:00');
     return <>
       <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date})}>› بازگشت به تقویم</Link>
-      <header className="local-heading"><div><h1>رزرو سانس</h1><p>{branch.name} · {longDay(date)}</p></div></header>
+      <header className="local-heading directory-heading"><div><h1>ثبت سانس</h1><p>{branch.name} · {longDay(date)}</p></div>
+        {activeBranches.length>1 && <form method="get" className="calendar-filter">
+          <input type="hidden" name="date" value={date} /><input type="hidden" name="kind" value={kind} />
+          {coach && <input type="hidden" name="coach" value={coach} />}
+          {student && <input type="hidden" name="student" value={student} />}
+          <label className="field"><span>شعبه</span><select name="branch" defaultValue={branch.id}>
+            {activeBranches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select></label><button className="button subtle">تغییر شعبه</button>
+        </form>}
+      </header>
       <section className="panel local-panel resource-editor">
         {problem && <p className="local-notice error" role="alert">{problem}</p>}
         {court ? <CreateBookingForm org={org} branch={branch.id} court={court.id} start={start} minStart={now.input}
-          courts={courts} coaches={coaches} students={students} request={randomUUID()} />
+          courts={courts} coaches={coaches} students={students} request={randomUUID()} defaults={{kind,coach,student}} />
           : <div className="empty-state"><strong>زمین فعال در این شعبه وجود ندارد.</strong>
             <Link className="panel-link" href={resourcePath(org,'courts','new')}>ثبت زمین</Link></div>}
       </section>
@@ -66,7 +84,12 @@ export default async function BookingPage({ params, searchParams }: {
     <Link className="panel-link" href={calendarPath(org,{branch:branch.id,date:detail.local_day})}>› بازگشت به تقویم</Link>
     <header className="local-heading directory-heading"><div><h1>{bookingKinds[detail.kind]}</h1><p>{branch.name} · {longDay(detail.local_day)}</p></div>
       <BookingStatus booking={detail} /></header>
-    {filters.saved==='1' && <p className="local-notice" role="status">تغییرات سانس ذخیره شد.</p>}
+    {filters.saved==='1' && <div className="calendar-section-title">
+      <p className="local-notice" role="status">تغییرات سانس ذخیره شد.</p>
+      {branch.active && <Link className="button subtle" href={calendarPath(org,{
+        booking:'new',branch:branch.id,court:detail.court_id,date:detail.local_day,kind:detail.kind,
+      })}>ثبت سانس بعدی</Link>}
+    </div>}
     {problem && <p className="local-notice error" role="alert">{problem}</p>}
     <div className="calendar-detail">
       <section className="panel local-panel">

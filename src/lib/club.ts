@@ -21,6 +21,7 @@ export type TodaySessionItem = {
   status: 'confirmed' | 'cancelled';
   booker_name: string | null;
   coach_name: string | null;
+  student_name: string | null;
   total_today: number;
   session_id: string | null;
   session_status: 'scheduled' | 'completed' | 'cancelled' | null;
@@ -75,6 +76,10 @@ export async function clubTodaySessions(userId: string, org: string, scope: Bran
     select b.id, b.location_id, l.name as branch_name, c.name as court_name,
       b.starts_at, b.ends_at, b.timezone, b.kind, b.status, b.booker_name,
       cp.name as coach_name, s.id as session_id, s.status as session_status,
+      (select p.name from public.session_participants sp
+        join public.student_profiles p on (p.organization_id,p.id)=(sp.organization_id,sp.student_id)
+        where b.kind='private' and (sp.organization_id,sp.location_id,sp.session_id)=(s.organization_id,s.location_id,s.id)
+          and sp.withdrawn_at is null order by sp.id limit 1) as student_name,
       count(*) over ()::int as total_today
     from public.bookings b
     join public.locations l on (l.organization_id, l.id) = (b.organization_id, b.location_id)

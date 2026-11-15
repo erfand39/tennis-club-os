@@ -1151,6 +1151,7 @@
 .calendar-row small { display: block; color: var(--muted); font-size: 11px; }
 .calendar-detail { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 13px; align-items: start; }
 .calendar-booking-form { max-width: 680px; }
+.calendar-person-field { display: grid; align-content: end; gap: 6px; min-width: 0; }
 .calendar-inputs { margin: 0; padding: 0; border: 0; min-width: 0; }
 .calendar-quote {
   display: flex;

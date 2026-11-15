@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { branches, clubFor, uuid } from '@/lib/club';
+import { calendarPath } from '@/lib/calendar-dates';
+import { reportPath, type ReportScope } from '@/lib/report-dates';
 import { currentUser } from '@/lib/session';
 import {
   attendanceStatuses, bookingKinds, bookingStatuses, faNumber, isResourceKind, persianDate, resourceActions,
@@ -10,6 +12,8 @@ import { availableCourts, courtSettings, resourceDetail, resourceHours, resource
 import { Notice } from '../../../../../ui';
 import { ArchiveForm, ResourceForm } from '../../resource-form';
 import { CourtSettings, Hours } from '../../resource-settings';
+
+const reportScope = { courts:'court', coaches:'coach', students:'student' } as const satisfies Record<string,ReportScope>;
 
 export default async function Details({ params, searchParams }: {
   params: Promise<{ org: string; kind: string; id: string }>;
@@ -44,13 +48,24 @@ export default async function Details({ params, searchParams }: {
   ]);
   const currentScope = scope.filter(branch => row.locations.includes(branch.id));
   const primaryBranch = currentScope[0];
+  const bookingBranch = row.status === 'active' && currentScope.find(branch => branch.active);
+  const booking = bookingBranch && calendarPath(org,{
+    booking:'new', branch:bookingBranch.id,
+    ...(kind==='students' ? { kind:'private', student:id } : kind==='coaches' ? { kind:'private', coach:id } : { court:id }),
+  });
   const currency = settings?.currency === 'IRR' ? 'ریال' : settings?.currency;
 
   return <>
     {back}
     <header className="local-heading directory-heading">
       <div><h1>{row.name}</h1><p>{row.subtitle || label} · {row.branch_names.join('، ') || 'بدون شعبه'}</p></div>
-      <span className={`resource-status is-${row.status}`}><i />{resourceStatuses[row.status]}</span>
+      <div className="finance-shortcuts">
+        <span className={`resource-status is-${row.status}`}><i />{resourceStatuses[row.status]}</span>
+        {currentScope.length>0 && <Link className="button subtle" href={reportPath(org,{scope:reportScope[kind],entity:id})}>
+          گزارش {label}
+        </Link>}
+        {booking && <Link className="button primary" href={booking}>ثبت سانس</Link>}
+      </div>
     </header>
     <Notice error={feedback.error} saved={feedback.saved === '1'} />
     <div className="resource-overview">

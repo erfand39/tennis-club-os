@@ -95,7 +95,8 @@ function Training({scope,data,session}:{scope:Scope;data:Awaited<ReturnType<type
 
 function Expenses({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof financeExpenses>>}) {
   return <>
-    <section className="panel local-panel"><details className="resource-disclosure"><summary>ثبت هزینهٔ پرداخت‌شده</summary>
+    <section className="panel local-panel" id="record-expense" aria-labelledby="expense-heading">
+      <h2 id="expense-heading">ثبت هزینهٔ پرداخت‌شده</h2>
       <FinanceForm command="finance-expense-record" label="ثبت هزینه">
         <div className="resource-form-grid">
           <label className="field"><span>عنوان هزینه</span><input name="title" required maxLength={120} /></label>
@@ -106,7 +107,7 @@ function Expenses({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof finan
         </div>
         <AmountFields currency={scope.currency} label="مبلغ هزینه" />
       </FinanceForm>
-    </details></section>
+    </section>
     <section className="panel local-panel"><h2>هزینه‌های بازه</h2>
       {!data.rows.length && <p>هزینه‌ای در این بازه ثبت نشده است.</p>}
       <ul className="resource-list">{data.rows.map(item=><li className="operations-row" key={item.id}>

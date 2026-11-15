@@ -87,6 +87,11 @@ export default async function ReportsPage({params,searchParams}:{
     <nav className="report-scopes" aria-label="نوع گزارش">{Object.entries(reportScopes).map(([key,label])=>
       <Link key={key} href={reportPath(org,{...filters,scope:key,entity:undefined})} aria-current={scope===key?'page':undefined}>{label}</Link>
     )}</nav>
+    {current&&<nav className="report-scopes" aria-label="بازه‌های سریع گزارش">
+      {([['day','امروز'],['week','این هفته'],['month','این ماه'],['year','امسال']] as const).map(([key,label])=>
+        <Link key={key} prefetch={false} href={reportPath(org,{...filters,period:key,anchor:context.today,from:undefined,to:undefined})}
+          aria-current={period===key&&filters.anchor===context.today?'page':undefined}>{label}</Link>)}
+    </nav>}
     <section className="panel report-filter-panel" aria-label="فیلتر گزارش">
       <ReportFilters key={JSON.stringify(filters)} filters={filters} branches={allBranches} entities={entities} scopeLabel={scope} />
       <p className="report-help">

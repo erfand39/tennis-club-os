@@ -4,17 +4,41 @@ import { type FormEvent, useRef, useState } from 'react';
 import { type BookingKind, type CalendarCourt } from '@/lib/calendar';
 import { errorMessage } from '@/lib/messages';
 import { bookingKinds } from '@/lib/resource-fields';
+import { normalizeSearchText } from '@/lib/resource-search';
 import { JalaliDateTimePicker } from '@/app/components/jalali-datepicker';
 import { displayPrice } from './booking-ui';
 
 type Person = { id: string; name: string };
 type Price = { amount: string; currency: string };
 
-export function CreateBookingForm({ org, branch, court, start, minStart, request, courts, coaches, students }: {
+function PersonField({ name, label, people, initial = '', required }: {
+  name: string; label: string; people: Person[]; initial?: string; required: boolean;
+}) {
+  const [query,setQuery] = useState('');
+  const [selected,setSelected] = useState(initial);
+  const search = normalizeSearchText(query);
+  const options = people.filter(person => person.id===selected || normalizeSearchText(person.name).includes(search));
+  return <div className="calendar-person-field">
+    {people.length>=8 && <label className="field"><span>جست‌وجوی {name==='coach' ? 'مربی' : 'شاگرد'}</span>
+      <input type="search" value={query} onChange={event => {
+        event.stopPropagation();
+        setQuery(event.currentTarget.value);
+      }} onKeyDown={event => { if (event.key==='Enter') event.preventDefault(); }} />
+    </label>}
+    <label className="field"><span>{label}</span><select name={name} value={selected} required={required}
+      onChange={event => setSelected(event.currentTarget.value)}>
+      <option value="">{options.length ? 'انتخاب کنید' : 'موردی پیدا نشد'}</option>
+      {options.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+    </select></label>
+  </div>;
+}
+
+export function CreateBookingForm({ org, branch, court, start, minStart, request, courts, coaches, students, defaults }: {
   org: string; branch: string; court: string; start: string; minStart: string; request: string;
   courts: CalendarCourt[]; coaches: Person[]; students: Person[];
+  defaults: { kind: BookingKind; coach?: string; student?: string };
 }) {
-  const [kind,setKind] = useState<BookingKind>('rental');
+  const [kind,setKind] = useState<BookingKind>(defaults.kind);
   const [price,setPrice] = useState<Price>();
   const [error,setError] = useState<string>();
   const [pending,setPending] = useState(false);
@@ -81,12 +105,8 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
       </div>
       <label className="field"><span>مدت به دقیقه</span><input inputMode="numeric" dir="ltr" name="minutes" defaultValue="60" maxLength={4} required /></label>
       {rental ? <label className="field resource-full"><span>نام رزروکننده</span><input name="booker" maxLength={120} required /></label> : <>
-        <label className="field"><span>مربی</span><select name="coach" required>
-          <option value="">انتخاب مربی</option>{coaches.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
-        </select></label>
-        <label className="field"><span>شاگرد{kind==='group'?' (اختیاری)':''}</span><select name="student" required={kind==='private'}>
-          <option value="">انتخاب شاگرد</option>{students.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
-        </select></label>
+        <PersonField name="coach" label="مربی" people={coaches} initial={defaults.coach ?? (coaches.length===1 ? coaches[0].id : '')} required />
+        <PersonField name="student" label={kind==='group'?'شاگرد (اختیاری)':'شاگرد'} people={students} initial={defaults.student} required={kind==='private'} />
         {kind==='group' && <label className="field"><span>ظرفیت کلاس</span><input name="capacity" inputMode="numeric" dir="ltr" defaultValue="6" maxLength={3} required /></label>}
       </>}
     </fieldset>
