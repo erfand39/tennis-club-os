@@ -1,0 +1,102 @@
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['desktop-v*']
+    paths:
+      - '.github/workflows/desktop-packages.yml'
+      - 'Start-Sam-Tennis.*'
+      - 'scripts/desktop.mjs'
+      - 'scripts/migrate-local.mjs'
+      - 'next.config.mjs'
+      - 'package*.json'
+      - 'local/**'
+      - 'supabase/**'
+      - 'src/**'
+      - 'docs/desktop.md'
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: macos-15-intel
+            platform: macos-x64
+          - runner: windows-2025
+            platform: windows-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out pinned Supabase Auth source
+        uses: actions/checkout@v5
+        with:
+          repository: supabase/auth
+          ref: 4fa66ba71d8c55b5c95cd5635766ed8bbae6d96a
+          path: auth-source
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.8'
+          cache-dependency-path: auth-source/go.sum
+      - name: Apply the Windows listener compatibility patch
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: auth-source
+        run: git apply ../local/desktop/auth-windows.patch
+      - name: Build the application
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm prune --omit=dev --no-audit --no-fund
+      - name: Assemble package
+        shell: bash
+        run: |
+          set -euo pipefail
+          product="Sam-Tennis-${{ matrix.platform }}"
+          mkdir -p "$product/runtime" "$product/scripts" "$product/supabase"
+          cp Start-Sam-Tennis.* package.json next.config.mjs "$product/"
+          cp docs/desktop.md "$product/"
+          cp scripts/desktop.mjs scripts/migrate-local.mjs "$product/scripts/"
+          cp -R node_modules local "$product/"
+          cp -R supabase/migrations "$product/supabase/"
+          rm -rf .next/cache
+          cp -R .next "$product/"
+          cp auth-source/LICENSE "$product/runtime/Supabase-Auth-LICENSE"
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix=.exe
+          else
+            suffix=
+          fi
+          node -e "require('node:fs').copyFileSync(process.execPath, process.argv[1])" "$product/runtime/node$suffix"
+          cp "$(dirname "$(command -v node)")/../LICENSE" "$product/runtime/Node-LICENSE" 2>/dev/null ||             cp "$(dirname "$(command -v node)")/LICENSE" "$product/runtime/Node-LICENSE"
+          (
+            cd auth-source
+            go build -trimpath -buildvcs=false -ldflags="-X github.com/supabase/auth/internal/utilities.Version=v2.189.0"               -o "../$product/runtime/auth$suffix" .
+          )
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a -tzip "$product.zip" "$product"
+          else
+            chmod +x "$product/Start-Sam-Tennis.command" "$product/runtime/node" "$product/runtime/auth"
+            ditto -c -k --sequesterRsrc --keepParent "$product" "$product.zip"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sam-Tennis-${{ matrix.platform }}
+          path: Sam-Tennis-${{ matrix.platform }}.zip
+          if-no-files-found: error

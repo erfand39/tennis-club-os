@@ -1,0 +1,7 @@
+# Migration checksums must survive checkout on macOS and Windows.
+*.sql text eol=lf
+*.command text eol=lf
+*.bat text eol=crlf
+*.patch text eol=lf
+# Unified patch context starts with a space, including tab-indented Go lines.
+local/desktop/*.patch whitespace=-space-before-tab,-blank-at-eol
