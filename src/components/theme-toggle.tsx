@@ -54,7 +54,7 @@ function subscribeTheme(onStoreChange: () => void) {
       stored = null;
     }
     if (!isTheme(stored)) {
-      applyThemeToDocument(event.matches ? 'dark' : 'light');
+      applyThemeToDocument(resolveTheme(stored, event.matches));
       onStoreChange();
     }
   };

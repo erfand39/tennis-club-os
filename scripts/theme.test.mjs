@@ -17,12 +17,12 @@ test('isTheme accepts only light and dark values', () => {
   assert.equal(isTheme(undefined), false);
 });
 
-test('resolveTheme respects stored theme and falls back to system preference', () => {
+test('resolveTheme respects stored theme and defaults to light for new visitors', () => {
   assert.equal(resolveTheme('dark', false), 'dark');
   assert.equal(resolveTheme('light', true), 'light');
-  assert.equal(resolveTheme(null, true), 'dark');
+  assert.equal(resolveTheme(null, true), 'light');
   assert.equal(resolveTheme(undefined, false), 'light');
-  assert.equal(resolveTheme('invalid', true), 'dark');
+  assert.equal(resolveTheme('invalid', true), 'light');
 });
 
 test('nextTheme and themeButtonMeta flip states accurately', () => {

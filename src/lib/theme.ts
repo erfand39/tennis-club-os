@@ -6,9 +6,9 @@ export function isTheme(value: unknown): value is Theme {
   return value === 'light' || value === 'dark';
 }
 
-export function resolveTheme(stored: string | null | undefined, prefersDark: boolean): Theme {
+export function resolveTheme(stored: string | null | undefined, _prefersDark: boolean): Theme {
   if (isTheme(stored)) return stored;
-  return prefersDark ? 'dark' : 'light';
+  return 'light';
 }
 
 export function nextTheme(current: Theme): Theme {
@@ -44,8 +44,7 @@ export function themeButtonMeta(theme: Theme | null): {
 export const THEME_INIT_SCRIPT = `(() => {
   try {
     var stored = localStorage.getItem('${THEME_STORAGE_KEY}');
-    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var theme = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
+    var theme = stored === 'dark' || stored === 'light' ? stored : 'light';
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   } catch (e) {}
