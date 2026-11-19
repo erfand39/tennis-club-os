@@ -8,7 +8,6 @@ import { financePath,invoiceStates,type InvoiceState } from '@/lib/finance-field
 import { MoneyText } from '@/components/money-text';
 import { asciiDigits,persianDate } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
-import { JalaliDatePicker } from '@/app/components/jalali-datepicker';
 import { InvoiceStatus } from './status';
 
 type Filters={branch?:string;from?:string;to?:string;status?:string;number?:string;page?:string};
@@ -44,10 +43,8 @@ export default async function FinancePage({params,searchParams}:{
         <label className="field"><span>شعبه</span><select name="branch" defaultValue={branch.id}>
           {scope.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label>
-        <div className="jalali-range-fields" data-jalali-range="true">
-          <div className="field"><span>از تاریخ</span><JalaliDatePicker name="from" defaultValue={from} required /></div>
-          <div className="field"><span>تا تاریخ</span><JalaliDatePicker name="to" defaultValue={to} required /></div>
-        </div>
+        <label className="field"><span>از تاریخ</span><input type="date" name="from" dir="ltr" defaultValue={from} required /></label>
+        <label className="field"><span>تا تاریخ</span><input type="date" name="to" dir="ltr" defaultValue={to} required /></label>
         <label className="field"><span>وضعیت فاکتور</span><select name="status" defaultValue={status ?? ''}>
           <option value="">همهٔ وضعیت‌ها</option>{Object.entries(invoiceStates).map(([key,label])=><option key={key} value={key}>{label}</option>)}
         </select></label>

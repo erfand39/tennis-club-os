@@ -19,7 +19,6 @@ import {
 import { localDateTimeParts } from '@/lib/calendar-dnd';
 import { resourcePath } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
-import { JalaliDatePicker } from '@/app/components/jalali-datepicker';
 import { LocalTimeRange } from './booking-ui';
 
 type Filters = { branch?: string; court?: string; date?: string; view?: string; page?: string };
@@ -220,10 +219,10 @@ export default async function Calendar({
               ))}
             </select>
           </label>
-          <div className="field">
+          <label className="field">
             <span>رفتن به تاریخ</span>
-            <JalaliDatePicker name="date" defaultValue={date} />
-          </div>
+            <input type="date" name="date" dir="ltr" defaultValue={date} />
+          </label>
           <button className="button subtle">نمایش</button>
         </form>
       </section>

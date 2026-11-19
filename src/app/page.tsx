@@ -7,8 +7,9 @@ import { AccessShell, Notice } from './ui';
 export const dynamic = 'force-dynamic';
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const [user, configured, { error }] = await Promise.all([currentUser(), isConfigured(), searchParams]);
-  if (user) redirect('/club');
+  if (await currentUser()) redirect('/club');
+  const configured = await isConfigured();
+  const { error } = await searchParams;
   if (configured === null) return <AccessShell>
     <h1>سامانه در دسترس نیست</h1>
     <p>اتصال پایگاه داده را بررسی کنید و دوباره تلاش کنید.</p>

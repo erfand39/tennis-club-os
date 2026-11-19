@@ -2,7 +2,7 @@ import { randomUUID,timingSafeEqual } from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { appOrigin, authUrl, isAuthConfigured, isDatabaseConfigured, setupCode } from '@/lib/config';
 import { asUser, database, hasManagerAccess } from '@/lib/db';
-import { branches, clubFor, members, uuid } from '@/lib/club';
+import { clubFor, members, uuid } from '@/lib/club';
 import { type ClubRole, roles } from '@/lib/roles';
 import { isBookingAction, runBookingAction } from '@/lib/booking-commands';
 import { isClassAction, runClassAction } from '@/lib/class-commands';
@@ -12,26 +12,28 @@ import { isFinanceAction,runFinanceAction } from '@/lib/finance-commands';
 import { financePath } from '@/lib/finance-fields';
 import { InputError } from '@/lib/input';
 import { disableDevice,enableDevice,markNotices,noticePath,pushCookie,setPushCookie } from '@/lib/notifications';
-import { isTrustedPostOrigin, resolveExpectedOrigin, safeRedirectPath } from '@/lib/origin-security';
 import { isResourceCommand, runResourceCommand } from '@/lib/resource-commands';
 import { isResourceKind, resourcePath } from '@/lib/resource-fields';
 import { searchResources } from '@/lib/resources';
 import {
   adminAuth, clearSessionCookie, cookieName, createWebSession, identify, publicAuth, removeSession, setSessionCookie,
 } from '@/lib/session';
-import { isPgError, requireUuid } from '@/lib/validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function requestOrigin(request?: NextRequest): string {
-  const configured = process.env.SAM_ORIGIN;
-  if (configured || !request) return appOrigin();
-  return resolveExpectedOrigin(request.url, request.headers.get('host'), configured);
+  if (process.env.SAM_ORIGIN || !request) return appOrigin();
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (host) {
+    const proto = request.headers.get('x-forwarded-proto')?.split(',')[0].trim() || (request.url.startsWith('https:') ? 'https' : 'http');
+    return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
 }
 
 function go(path: string, problem?: string, request?: NextRequest): NextResponse {
-  const url = new URL(safeRedirectPath(path), requestOrigin(request));
+  const url = new URL(path, requestOrigin(request));
   if (problem) url.searchParams.set('error', problem);
   return NextResponse.redirect(url, 303);
 }
@@ -43,13 +45,16 @@ function equalSecret(left: string, right: string): boolean {
 }
 
 function hasTrustedOrigin(request: NextRequest): boolean {
-  return isTrustedPostOrigin({
-    expectedOrigin: requestOrigin(request),
-    originHeader: request.headers.get('origin'),
-    hostHeader: request.headers.get('host'),
-    secFetchSite: request.headers.get('sec-fetch-site'),
-    hasConfiguredOrigin: Boolean(process.env.SAM_ORIGIN),
-  });
+  const expected = requestOrigin(request);
+  const origin = request.headers.get('origin');
+  if (origin === expected) return true;
+  if (!process.env.SAM_ORIGIN && !origin && request.headers.get('sec-fetch-site') === 'same-origin') return true;
+  if (origin !== 'null') return false;
+
+  // Safari can serialize an opaque document origin as "null" on form navigation.
+  // Accept it only when Fetch Metadata confirms same-origin and Host matches this install.
+  return request.headers.get('sec-fetch-site') === 'same-origin'
+    && request.headers.get('host') === new URL(expected).host;
 }
 
 async function form(request: NextRequest): Promise<URLSearchParams> {
@@ -93,7 +98,11 @@ function nameOf(values: URLSearchParams): string {
   if (!name || name.length > 120) throw new InputError('name');
   return name;
 }
-const idOf = (values: URLSearchParams, key: string): string => requireUuid(values.get(key), 'invalid');
+function idOf(values: URLSearchParams, key: string): string {
+  const id = values.get(key) ?? '';
+  if (!uuid(id)) throw new InputError('invalid');
+  return id;
+}
 function accessOf(values: URLSearchParams) {
   const role = values.get('role') ?? '';
   const locations = values.getAll('location');
@@ -147,14 +156,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ act
     try {
       const results = await searchResources(user.id, org, q);
       return NextResponse.json({ results });
-    } catch (failure) {
-      const trace = randomUUID();
-      console.error(JSON.stringify({
-        event: 'local_resource_search_unavailable',
-        trace,
-        errorName: failure instanceof Error ? failure.name : 'UnknownError',
-        errorCode: isPgError(failure) ? failure.code : undefined,
-      }));
+    } catch {
       return NextResponse.json({ error: 'unavailable' }, { status: 503 });
     }
   }
@@ -187,11 +189,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     if (action === 'setup') {
       if (!isDatabaseConfigured() || !isAuthConfigured()) throw new InputError('unavailable', 503);
-      const configuredCode = setupCode();
-      if (Buffer.byteLength(configuredCode) < 32) throw new InputError('unavailable', 503);
       const { rows: [cfg] } = await database().query<{ configured: boolean }>('select tennis_runtime.is_configured() as configured');
       if (cfg?.configured) throw new InputError('setup-done', 409);
-      if (!equalSecret(fields.get('code') ?? '', configuredCode)) throw new InputError('setup-code', 403);
+      if (!equalSecret(fields.get('code') ?? '', setupCode())) throw new InputError('setup-code', 403);
       const email = emailOf(fields);
       const password = passwordOf(fields);
       const name = nameOf(fields);
@@ -306,10 +306,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       fields.set('active', 'yes');
       const email = emailOf(fields);
       const access = accessOf(fields);
-      if (access.locations.length) {
-        const validIds = new Set((await branches(user.id, org)).map(item => item.id));
-        if (access.locations.some(locationId => !validIds.has(locationId))) throw new InputError('branches');
-      }
       const result = await adminAuth().admin.generateLink({ type: 'invite', email });
       if (result.error || !result.data.properties?.hashed_token || !result.data.user?.id) throw new InputError('invite');
       await asUser(user.id, db => db.query('select public.set_club_member($1,$2,$3,$4,$5)',
@@ -326,7 +322,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     }
     return NextResponse.json({ error: 'missing' }, { status: 404 });
   } catch (failure) {
-    const dbError = isPgError(failure) ? failure : {};
+    const dbError = failure as { code?: string; message?: string };
     const code = failure instanceof InputError ? failure.code
       : dbError.code === '42501' ? 'denied'
       : dbError.message === 'invalid_member_locations' ? 'branches'
@@ -344,12 +340,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     const response=wantsJson ? NextResponse.json({ error: code }, { status }) : go(errorPath, code, request);
     if (code==='unavailable') {
       const trace=randomUUID();
-      console.error(JSON.stringify({
-        event: 'local_api_unavailable',
-        trace,
-        errorName: failure instanceof Error ? failure.name : 'UnknownError',
-        errorCode: dbError.code,
-      }));
+      console.error(JSON.stringify({event:'local_api_unavailable',trace}));
       response.headers.set('X-Sam-Trace',trace);
     }
     return response;

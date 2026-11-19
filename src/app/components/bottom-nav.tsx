@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from './icon';
-import { Logout } from '@/app/ui';
+import { Logout } from '../ui';
 import { resourcePath } from '@/lib/resource-fields';
 
 export interface BottomNavProps {

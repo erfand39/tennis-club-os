@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { clubs } from '@/lib/club';
 import { roles } from '@/lib/roles';
 import { currentUser } from '@/lib/session';
-import { AccessShell, Logout } from '@/app/ui';
+import { AccessShell, Logout } from '../ui';
 
 export const dynamic = 'force-dynamic';
 

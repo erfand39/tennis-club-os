@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { JalaliDatePicker } from '@/app/components/jalali-datepicker';
 import { reportPeriods,type ReportPeriod } from '@/lib/report-dates';
 
 export function ReportFilters({filters,branches,entities,scopeLabel}:{
@@ -31,9 +30,9 @@ export function ReportFilters({filters,branches,entities,scopeLabel}:{
       {Object.entries(reportPeriods).map(([key,label])=><option key={key} value={key}>{label}</option>)}
     </select></label>
     {period==='custom'?<>
-      <div className="field"><span>از تاریخ</span><JalaliDatePicker name="from" defaultValue={filters.from} required /></div>
-      <div className="field"><span>تا تاریخ</span><JalaliDatePicker name="to" defaultValue={filters.to} required /></div>
-    </>:<div className="field"><span>تاریخ مرجع</span><JalaliDatePicker name="anchor" defaultValue={filters.anchor} required /></div>}
+      <label className="field"><span>از تاریخ</span><input dir="ltr" type="date" name="from" defaultValue={filters.from} required /></label>
+      <label className="field"><span>تا تاریخ</span><input dir="ltr" type="date" name="to" defaultValue={filters.to} required /></label>
+    </>:<label className="field"><span>تاریخ مرجع</span><input dir="ltr" type="date" name="anchor" defaultValue={filters.anchor} required /></label>}
     <label className="report-check"><input type="checkbox" name="compare" value="1" defaultChecked={filters.compare==='1'} /> مقایسه با دورهٔ قبل</label>
     <button className="button primary">اعمال فیلتر</button>
   </form>;

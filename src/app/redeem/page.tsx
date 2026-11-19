@@ -1,4 +1,4 @@
-import { AccessShell } from '@/app/ui';
+import { AccessShell } from '../ui';
 import { RedeemForm } from './redeem-form';
 
 export default async function Redeem({ searchParams }: { searchParams: Promise<{ mode?: string }> }) {

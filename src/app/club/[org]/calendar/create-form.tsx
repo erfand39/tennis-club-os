@@ -1,9 +1,9 @@
 'use client';
 
 import { type FormEvent, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { type BookingKind, type CalendarCourt } from '@/lib/calendar';
 import { errorMessage } from '@/lib/messages';
-import { type BookingKind, type CalendarCourt, bookingKinds } from '@/lib/resource-fields';
+import { bookingKinds } from '@/lib/resource-fields';
 import { normalizeSearchText } from '@/lib/resource-search';
 import { JalaliDateTimePicker } from '@/app/components/jalali-datepicker';
 import { displayPrice } from './booking-ui';
@@ -38,7 +38,6 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
   courts: CalendarCourt[]; coaches: Person[]; students: Person[];
   defaults: { kind: BookingKind; coach?: string; student?: string };
 }) {
-  const router = useRouter();
   const [kind,setKind] = useState<BookingKind>(defaults.kind);
   const [price,setPrice] = useState<Price>();
   const [error,setError] = useState<string>();
@@ -68,8 +67,7 @@ export function CreateBookingForm({ org, branch, court, start, minStart, request
         setError(errorMessage(result.error ?? 'unavailable'));
         if (result.error==='booking-price-changed' || result.error==='booking-no-rate' || result.error==='booking-duration') setPrice(undefined);
       } else if (price && typeof result.next==='string' && result.next.startsWith('/club/')) {
-        router.push(result.next);
-        router.refresh();
+        location.assign(result.next);
       } else if (!price && result.price) {
         setPrice(result.price);
       } else setError(errorMessage('unavailable'));

@@ -1,8 +1,6 @@
 'use client';
 
 import { createContext,type FormEvent,type ReactNode,useContext,useEffect,useRef,useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ConfirmDialog } from '@/app/components/confirm-dialog';
 import { financePath,isFinanceCommand,type FinanceCommandName } from '@/lib/finance-fields';
 import { errorMessage } from '@/lib/messages';
 import { currencyLabel,formatMinor,parseMinor } from '@/lib/money';
@@ -30,7 +28,6 @@ function loadDraft(key:string):Pending|null {
 export function FinanceActions({user,org,branch,subject,children}:{
   user:string;org:string;branch:string;subject:{booking:string}|{invoice:string}|{operation:string};children:ReactNode;
 }) {
-  const router = useRouter();
   const key=`sam-finance-v1:${user}:${org}:${'invoice' in subject ? 'invoice:'+subject.invoice : 'booking' in subject ? 'booking:'+subject.booking : 'operation:'+subject.operation}`;
   const [pending,setPending]=useState<Pending|null>(null);
   const [ready,setReady]=useState(false);
@@ -74,8 +71,7 @@ export function FinanceActions({user,org,branch,subject,children}:{
       const data=await response.json();
       if (response.ok && typeof data.next==='string' && data.next.startsWith(financePath(org)+'/')) {
         if (loadDraft(key)?.request===draft.request) localStorage.removeItem(key);
-        router.push(data.next);
-        router.refresh();
+        location.assign(data.next);
         return;
       }
       if (!checkOnly && rejectionCodes.has(data.error)) {
@@ -127,44 +123,16 @@ export function FinanceForm({command,label,children,danger=false}:{
   command:FinanceCommandName;label:string;children:ReactNode;danger?:boolean;
 }) {
   const context=useContext(FinanceContext);
-  const formRef=useRef<HTMLFormElement>(null);
-  const [confirmOpen,setConfirmOpen]=useState(false);
-
   function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!context || context.blocked) return;
-    if (!event.currentTarget.reportValidity()) return;
-    if (danger) {
-      setConfirmOpen(true);
-      return;
-    }
-    context.send(command,event.currentTarget);
+    if (context && !context.blocked) context.send(command,event.currentTarget);
   }
-  return <>
-    <form ref={formRef} className="local-form finance-form" onSubmit={submit}>
-      <fieldset disabled={!context || context.blocked} className="local-form calendar-inputs">
-        {children}
-        <button className={`button ${danger?'danger-quiet':'primary'}`}>{label}</button>
-      </fieldset>
-    </form>
-    {danger && (
-      <ConfirmDialog
-        isOpen={confirmOpen}
-        isDestructive
-        title={label}
-        message="آیا از ثبت این عملیات مالی حساس اطمینان دارید؟"
-        confirmLabel={label}
-        cancelLabel="انصراف"
-        onConfirm={() => {
-          setConfirmOpen(false);
-          if (context && !context.blocked && formRef.current) {
-            context.send(command, formRef.current);
-          }
-        }}
-        onCancel={() => setConfirmOpen(false)}
-      />
-    )}
-  </>;
+  return <form className="local-form finance-form" onSubmit={submit}>
+    <fieldset disabled={!context || context.blocked} className="local-form calendar-inputs">
+      {children}
+      <button className={`button ${danger?'danger-quiet':'primary'}`}>{label}</button>
+    </fieldset>
+  </form>;
 }
 
 export function AmountFields({currency,name='amount',label='مبلغ',required=true}:{

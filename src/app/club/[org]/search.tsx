@@ -6,9 +6,7 @@ import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { type ResourceSearchItem, resourceKinds, resourcePath } from '@/lib/resource-fields';
 import { formatSearchMeta } from '@/lib/resource-search';
 
-let pendingMobileSearchFocus = false;
-
-export function ClubSearch({ org, mode = 'desktop' }: { org: string; mode?: 'desktop' | 'mobile' }) {
+export function ClubSearch({ org }: { org: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,32 +34,23 @@ export function ClubSearch({ org, mode = 'desktop' }: { org: string; mode?: 'des
       }
     };
     const onShortcut = (event: globalThis.KeyboardEvent) => {
-      if (mode !== 'desktop') return;
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
       event.preventDefault();
       if (window.innerWidth <= 840) {
-        pendingMobileSearchFocus = true;
         window.dispatchEvent(new CustomEvent('sam:open-club-search'));
       } else {
         inputRef.current?.focus();
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
-    if (mode === 'desktop') document.addEventListener('keydown', onShortcut);
+    document.addEventListener('keydown', onShortcut);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
-      if (mode === 'desktop') document.removeEventListener('keydown', onShortcut);
+      document.removeEventListener('keydown', onShortcut);
     };
-  }, [mode]);
-
-  useEffect(() => {
-    if (mode !== 'mobile' || !pendingMobileSearchFocus) return;
-    pendingMobileSearchFocus = false;
-    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
     if (!trimmed) {

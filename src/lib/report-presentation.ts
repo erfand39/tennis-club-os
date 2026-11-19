@@ -1,4 +1,3 @@
-import 'server-only';
 import { addDays,calendarPath,numberFa,saturdayIndex,weekLabels } from './calendar-dates';
 import { financePath } from './finance-fields';
 import { currencyLabel,formatMinor } from './money';

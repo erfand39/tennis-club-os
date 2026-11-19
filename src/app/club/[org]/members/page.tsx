@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { type Branch, type Member, branches, clubFor, members } from '@/lib/club';
 import { currentUser } from '@/lib/session';
 import { roles } from '@/lib/roles';
-import { Notice } from '@/app/ui';
+import { Notice } from '../../../ui';
 import { LinkForm } from './link-form';
 
 function AccessFields({ scope, member }: { scope: Branch[]; member?: Member }) {

@@ -5,7 +5,6 @@ import { asUser } from './db';
 import { parseMinor } from './money';
 import { InputError } from './input';
 import { asciiDigits, bookingKinds, isResourceKind, resourceKinds, resourcePath } from './resource-fields';
-import { requireSafeInt, requireUuid } from './validation';
 
 export const resourceCommands = ['resource', 'resource-hours', 'resource-rate', 'resource-block', 'resource-release'] as const;
 export type ResourceCommand = typeof resourceCommands[number];
@@ -18,14 +17,22 @@ function field(values: URLSearchParams, key: string, max: number, required = fal
   if (value.length > max || (required && !value)) throw new InputError('resource-invalid');
   return value;
 }
-const id = (values: URLSearchParams, key: string): string => requireUuid(values.get(key), 'resource-invalid');
+function id(values: URLSearchParams, key: string): string {
+  const value = values.get(key) ?? '';
+  if (!uuid(value)) throw new InputError('resource-invalid');
+  return value;
+}
 function ids(values: URLSearchParams, key: string): string[] {
   const selected = [...new Set(values.getAll(key))].sort();
   if (selected.length > 100 || selected.some(value => !uuid(value))) throw new InputError('resource-invalid');
   return selected;
 }
-const numeric = (value: string, min: number, max: number): number =>
-  requireSafeInt(value, 'resource-number', { min, max, maxDigits: 20, allowGrouping: true });
+function numeric(value: string, min: number, max: number): number {
+  const normalized = asciiDigits(value.trim()).replace(/٬/g, ',');
+  const result = Number(normalized.replace(/,/g, ''));
+  if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(normalized) || !Number.isSafeInteger(result) || result < min || result > max) throw new InputError('resource-number');
+  return result;
+}
 function date(value: string, optional = false): string | null {
   const cleaned = asciiDigits(value);
   if (!cleaned && optional) return null;

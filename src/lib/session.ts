@@ -10,9 +10,6 @@ import { database, hasManagerAccess, transaction } from './db';
 
 export const cookieName = 'sam_session';
 const lifetimeSeconds = 12 * 60 * 60;
-const expiredSweepIntervalMs = 300_000;
-let lastExpiredSweep = 0;
-const inflightRefreshes = new Map<string, Promise<StoredSession | null>>();
 type Credentials = { access: string; refresh: string };
 export type WebUser = { id: string; email: string };
 type StoredSession = {
@@ -42,15 +39,7 @@ function open(row: StoredSession): Credentials {
   const cipher = createDecipheriv('aes-256-gcm', sessionKey(), iv);
   cipher.setAAD(Buffer.from(row.user_id));
   cipher.setAuthTag(tag);
-  const parsed: unknown = JSON.parse(Buffer.concat([cipher.update(bytes), cipher.final()]).toString());
-  if (
-    typeof parsed !== 'object' || parsed === null ||
-    typeof (parsed as Credentials).access !== 'string' ||
-    typeof (parsed as Credentials).refresh !== 'string'
-  ) {
-    throw new Error('Invalid stored session credentials.');
-  }
-  return parsed as Credentials;
+  return JSON.parse(Buffer.concat([cipher.update(bytes), cipher.final()]).toString()) as Credentials;
 }
 
 function tokensFrom(session: Session): Credentials {
@@ -59,13 +48,10 @@ function tokensFrom(session: Session): Credentials {
 
 export async function createWebSession(session: Session, replace?: string, revokeOthers = false): Promise<string> {
   const token = randomBytes(32).toString('base64url');
-  const nowMs = Date.now();
-  const shouldSweep = nowMs - lastExpiredSweep > expiredSweepIntervalMs;
-  if (shouldSweep) lastExpiredSweep = nowMs;
   await transaction(async client => {
     if (revokeOthers) await client.query('delete from tennis_runtime.web_sessions where user_id=$1', [session.user.id]);
     else if (validToken(replace)) await client.query('delete from tennis_runtime.web_sessions where token_hash=$1', [digest(replace)]);
-    if (shouldSweep) await client.query('delete from tennis_runtime.web_sessions where expires_at <= now()');
+    await client.query('delete from tennis_runtime.web_sessions where expires_at <= now()');
     await client.query(`insert into tennis_runtime.web_sessions
       (token_hash,user_id,email,credentials,access_expires_at,expires_at)
       values ($1,$2,$3,$4,to_timestamp($5),now()+make_interval(secs=>$6))`, [
@@ -90,7 +76,7 @@ function needRefresh(row: StoredSession): boolean {
 const sessionSql = `select user_id,email,credentials,access_expires_at from tennis_runtime.web_sessions
   where token_hash=$1 and expires_at > now()`;
 
-async function performRefresh(hash: string): Promise<StoredSession | null> {
+async function refresh(hash: string): Promise<StoredSession | null> {
   return transaction(async client => {
     const { rows: [row] } = await client.query<StoredSession>(`${sessionSql} for update`, [hash]);
     if (!row) return null;
@@ -112,17 +98,8 @@ async function performRefresh(hash: string): Promise<StoredSession | null> {
   });
 }
 
-async function refresh(hash: string): Promise<StoredSession | null> {
-  const active = inflightRefreshes.get(hash);
-  if (active) return active;
-  const task = performRefresh(hash).finally(() => {
-    inflightRefreshes.delete(hash);
-  });
-  inflightRefreshes.set(hash, task);
-  return task;
-}
-
-const identifyCached = cache(async (value: string): Promise<WebUser | null> => {
+export async function identify(value: string | undefined): Promise<WebUser | null> {
+  if (!validToken(value) || !isDatabaseConfigured() || !isAuthConfigured()) return null;
   const hash = digest(value);
   const { rows } = await database().query<StoredSession>(sessionSql, [hash]);
   if (!rows[0]) return null;
@@ -135,11 +112,6 @@ const identifyCached = cache(async (value: string): Promise<WebUser | null> => {
   }
   if (!(await hasManagerAccess(row.user_id))) return null;
   return { id: row.user_id, email: data.user.email ?? row.email };
-});
-
-export async function identify(value: string | undefined): Promise<WebUser | null> {
-  if (!validToken(value) || !isDatabaseConfigured() || !isAuthConfigured()) return null;
-  return identifyCached(value);
 }
 
 export const currentUser = cache(async () => {

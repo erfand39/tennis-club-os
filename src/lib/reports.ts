@@ -47,8 +47,9 @@ const single=(query:Query,key:string)=>typeof query[key]==='string'?query[key]:u
 export async function getReportContext(org:string,query:Query) {
   const user=await currentUser();
   if (!user) redirect('/');
-  const [club,allBranches]=await Promise.all([clubFor(user.id,org),branches(user.id,org)]);
+  const club=await clubFor(user.id,org);
   if (!club) notFound();
+  const allBranches=await branches(user.id,org);
   const branch=single(query,'branch') || '';
   const selectedBranches=branch?allBranches.filter(item=>item.id===branch):allBranches;
   if (branch && selectedBranches.length===0) notFound();

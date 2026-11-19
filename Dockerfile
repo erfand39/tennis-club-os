@@ -6,7 +6,8 @@ RUN npm ci --no-audit --no-fund
 COPY next.config.mjs tsconfig.json next-env.d.ts ./
 COPY src ./src
 COPY local/auth-client.mjs local/push.mjs local/push-config.mjs ./local/
-RUN npm run build && rm -rf .next/cache && npm prune --omit=dev --no-audit --no-fund
+COPY supabase/types ./supabase/types
+RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
 FROM node:24.15.0-bookworm-slim
 WORKDIR /app

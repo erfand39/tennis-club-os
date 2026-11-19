@@ -12,24 +12,13 @@ export type ResourceRow = {
   subtitle: string | null;
   branch_names: string[];
 };
-export type StudentPackageSummary = {
-  id: string;
-  title: string;
-  remaining: number | null;
-  total: number | null;
-  used: number;
-};
-export type StudentDebtSummary = {
-  currency: string;
-  amount_minor: string;
-};
 type DetailData = {
   notes: string | null; capacity?: number; amenities?: string[]; surface?: string;
   contact_phone?: string | null; contact_email?: string | null; specialty?: string | null; qualification?: string | null;
-  skill_level?: string | null; joined_on?: string | null; pay_basis?: 'hourly' | 'per_session' | 'revenue_share' | 'agreement' | null;
+  skill_level?: string | null; joined_on?: string | null; pay_basis?: 'hourly' | 'per_session' | null;
   pay_amount_minor?: number | null;
-  packages?: StudentPackageSummary[];
-  debts?: StudentDebtSummary[];
+  packages?: { title: string; remaining: number; total: number }[];
+  debt?: number;
 };
 export type ResourceDetail = ResourceRow & { revision: string; locations: string[]; data: DetailData };
 export type ResourceFilters = { q: string; status: string; branch: string; sort: string; page: number; inactiveDays: number };
@@ -96,73 +85,18 @@ export function resourceList(user: string, org: string, kind: ResourceKind, filt
   const params = [org,filters.q,filters.status,filters.branch,filters.inactiveDays];
   const order = orders[filters.sort as keyof typeof orders] ?? orders.name;
   return asUser(user, async db => {
-    const { rows } = await db.query<ResourceRow & { total_count: number }>(`${query}
-      select id,name,status,updated_at,subtitle,branch_names,count(*) over()::int as total_count
-      from filtered order by ${order} limit $6 offset $7`,
-    [...params,pageSize,(filters.page-1)*pageSize]);
-    if (rows.length > 0 || filters.page === 1) {
-      const total = rows[0]?.total_count ?? 0;
-      const pages = Math.max(1,Math.ceil(total/pageSize));
-      const page = Math.min(filters.page,pages);
-      return { rows: rows.map(({ total_count: _totalCount, ...row }) => row),total,pages,page };
-    }
     const total = (await db.query<{ total: number }>(`${query} select count(*)::int as total from filtered`, params)).rows[0].total;
     const pages = Math.max(1,Math.ceil(total/pageSize));
     const page = Math.min(filters.page,pages);
-    const { rows: clamped } = await db.query<ResourceRow>(`${query}
+    const { rows } = await db.query<ResourceRow>(`${query}
       select id,name,status,updated_at,subtitle,branch_names from filtered order by ${order} limit $6 offset $7`,
     [...params,pageSize,(page-1)*pageSize]);
-    return { rows: clamped,total,pages,page };
+    return { rows,total,pages,page };
   });
 }
 
 export function resourceDetail(user: string, org: string, kind: ResourceKind, id: string) {
-  return asUser(user, async db => {
-    const row = (await db.query<ResourceDetail>(`select * from (${base[kind]}) r where id=$2`, [org,id])).rows[0];
-    if (!row || kind !== 'students') return row;
-    const [packagesResult, debtsResult] = await Promise.all([
-      db.query<{
-        id: string;
-        title: string;
-        total: number | null;
-        used: number;
-      }>(`
-        select t.id, t.title, t.sessions as total,
-          count(u.id)::int as used
-        from public.training_packages t
-        join public.locations l on (l.organization_id, l.id) = (t.organization_id, t.location_id)
-        left join public.training_uses u on u.package_id = t.id and u.reversed_at is null
-        where t.organization_id = $1 and t.student_id = $2 and t.status = 'active'
-          and t.valid_until >= timezone(l.timezone, now())::date
-        group by t.id, l.timezone
-        order by t.valid_until asc, t.id asc
-      `, [org, id]),
-      db.query<StudentDebtSummary>(`
-        select ib.currency, sum(ib.due_minor)::text as amount_minor
-        from public.invoice_balances ib
-        where ib.organization_id = $1 and ib.due_minor > 0
-          and exists (
-            select 1 from public.invoice_items li
-            left join public.training_packages tp on tp.id = li.package_id
-            left join public.bookings b on b.id = li.booking_id
-            left join public.sessions s on (s.organization_id, s.location_id, s.booking_id) = (b.organization_id, b.location_id, b.id)
-            left join public.session_participants sp on (sp.organization_id, sp.location_id, sp.session_id) = (s.organization_id, s.location_id, s.id)
-            where li.invoice_id = ib.invoice_id and li.active
-              and (tp.student_id = $2 or (b.kind = 'private' and sp.student_id = $2 and sp.withdrawn_at is null))
-          )
-        group by ib.currency
-        order by ib.currency
-      `, [org, id]),
-    ]);
-    const packages: StudentPackageSummary[] = packagesResult.rows.map(pkg => ({
-      id: pkg.id,
-      title: pkg.title,
-      total: pkg.total,
-      used: pkg.used,
-      remaining: pkg.total !== null ? Math.max(0, pkg.total - pkg.used) : null,
-    }));
-    return { ...row, data: { ...row.data, packages, debts: debtsResult.rows } };
-  });
+  return asUser(user, async db => (await db.query<ResourceDetail>(`select * from (${base[kind]}) r where id=$2`, [org,id])).rows[0]);
 }
 
 export async function searchResources(user: string, org: string, rawQuery: string, limit = 12): Promise<ResourceSearchItem[]> {

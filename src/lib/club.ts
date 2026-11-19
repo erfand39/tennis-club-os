@@ -1,5 +1,4 @@
 import 'server-only';
-import { cache } from 'react';
 import { asUser } from './db';
 import type { bookingKinds } from './resource-fields';
 import type { ClubRole } from './roles';
@@ -29,66 +28,36 @@ export type TodaySessionItem = {
 };
 export const uuid = (id: string) => /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id);
 
-export const clubs = cache(async (userId: string): Promise<Club[]> => {
+export async function clubs(userId: string): Promise<Club[]> {
   return asUser(userId, async db => (await db.query<Club>(`
     select o.id,o.name,m.role from public.organizations as o
     join public.organization_members as m on m.organization_id=o.id
     where m.user_id=$1 and m.active and m.role in ('owner','admin') order by o.name,o.id`, [userId])).rows);
-});
+}
 
-export const clubFor = cache(async (userId: string, org: string): Promise<Club | null> => {
+export async function clubFor(userId: string, org: string): Promise<Club | null> {
   if (!uuid(org)) return null;
-  return asUser(userId, async db => (await db.query<Club>(`
-    select o.id,o.name,m.role from public.organizations as o
-    join public.organization_members as m on m.organization_id=o.id
-    where m.user_id=$1 and o.id=$2 and m.active and m.role in ('owner','admin')`, [userId, org])).rows[0] ?? null);
-});
+  return (await clubs(userId)).find(club => club.id === org) ?? null;
+}
 
-export const branches = cache(async (userId: string, org: string): Promise<Branch[]> => {
+export async function branches(userId: string, org: string): Promise<Branch[]> {
   return asUser(userId, async db => (await db.query<Branch>(
     'select id,name,timezone,active from public.locations where organization_id=$1 order by name', [org])).rows);
-});
+}
 
 export async function members(userId: string, org: string): Promise<Member[]> {
   return asUser(userId, async db => (await db.query<Member>('select * from public.club_members($1)', [org])).rows);
 }
 
-export const displayName = cache(async (userId: string): Promise<string> => {
+export async function displayName(userId: string): Promise<string> {
   return asUser(userId, async db => (await db.query<{ display_name: string }>(
     'select display_name from public.profiles where user_id=$1', [userId])).rows[0]?.display_name ?? '');
-});
+}
 
-export const clubCurrency = cache(async (userId: string, org: string): Promise<string | null> => {
+export async function clubCurrency(userId: string, org: string): Promise<string | null> {
   return asUser(userId, async db => (await db.query<{ currency: string }>(
     'select currency from public.organizations where id=$1', [org])).rows[0]?.currency ?? null);
-});
-
-export const clubShellData = cache(async (userId: string, org: string): Promise<{
-  club: Club | null;
-  name: string;
-  branchList: Branch[];
-}> => {
-  if (!uuid(org)) return { club: null, name: '', branchList: [] };
-  return asUser(userId, async db => {
-    const [clubRes, nameRes, branchRes] = await Promise.all([
-      db.query<Club>(`
-        select o.id,o.name,m.role from public.organizations as o
-        join public.organization_members as m on m.organization_id=o.id
-        where m.user_id=$1 and o.id=$2 and m.active and m.role in ('owner','admin')`, [userId, org]),
-      db.query<{ display_name: string }>(
-        'select display_name from public.profiles where user_id=$1', [userId],
-      ),
-      db.query<Branch>(
-        'select id,name,timezone,active from public.locations where organization_id=$1 order by name', [org],
-      ),
-    ]);
-    return {
-      club: clubRes.rows[0] ?? null,
-      name: nameRes.rows[0]?.display_name ?? '',
-      branchList: branchRes.rows,
-    };
-  });
-});
+}
 
 export async function clubOverviewCounts(userId: string, org: string) {
   return asUser(userId, async db => (await db.query<{

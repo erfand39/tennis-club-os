@@ -366,8 +366,3 @@
   .report-scopes a, .report-table-tabs a { min-height: 44px; }
   .report-metric a { min-height: 44px; min-width: 44px; }
 }
-
-.report-detail {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 400px;
-}

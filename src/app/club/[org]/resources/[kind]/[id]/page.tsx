@@ -9,8 +9,7 @@ import {
   resourceKinds, resourcePath, resourceStatuses,
 } from '@/lib/resource-fields';
 import { availableCourts, courtSettings, resourceDetail, resourceHours, resourceRecords } from '@/lib/resources';
-import { MoneyText } from '@/components/money-text';
-import { Notice } from '@/app/ui';
+import { Notice } from '../../../../../ui';
 import { ArchiveForm, ResourceForm } from '../../resource-form';
 import { CourtSettings, Hours } from '../../resource-settings';
 
@@ -88,31 +87,23 @@ export default async function Details({ params, searchParams }: {
       <section className="panel local-panel student-financial-summary">
         <h2>وضعیت مالی و بسته‌های آموزشی</h2>
         {row.data.packages?.length ? (
-          <div className="student-packages">
-            {row.data.packages.map(pkg => (
-              <div key={pkg.id} className="package-item">
+          <div className="student-packages" style={{ display: 'grid', gap: '8px', margin: '10px 0' }}>
+            {row.data.packages.map((pkg: any, idx: number) => (
+              <div key={idx} className="package-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>{pkg.title}</strong>
-                <span>
-                  {pkg.total === null || pkg.remaining === null
-                    ? `نامحدود (${faNumber.format(pkg.used)} جلسه)`
-                    : pkg.remaining === 0
-                      ? 'بسته پایان‌یافته'
-                      : `${faNumber.format(pkg.remaining)} از ${faNumber.format(pkg.total)}`}
-                </span>
+                <span>{faNumber.format(pkg.remaining)} از {faNumber.format(pkg.total)}</span>
               </div>
             ))}
           </div>
         ) : (
           <p>بدون بسته آموزشی فعال</p>
         )}
-        <div className="student-debt-status">
-          {row.data.debts?.length ? (
-            row.data.debts.map(item => (
-              <p key={item.currency}>
-                بدهی جاری: <strong><MoneyText amount={item.amount_minor} currency={item.currency} /></strong> —{' '}
-                <Link className="panel-link" href={`/club/${org}/finance`}>پرداخت بدهی</Link>
-              </p>
-            ))
+        <div className="student-debt-status" style={{ marginTop: '12px' }}>
+          {row.data.debt && row.data.debt > 0 ? (
+            <p>
+              بدهی جاری: <strong>{faNumber.format(row.data.debt)} ریال</strong> —{' '}
+              <Link className="panel-link" href={`/club/${org}/finance`}>پرداخت بدهی</Link>
+            </p>
           ) : (
             <span className="local-label">حساب تسویه</span>
           )}

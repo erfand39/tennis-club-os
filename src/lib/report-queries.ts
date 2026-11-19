@@ -1,5 +1,3 @@
-import 'server-only';
-
 // All queries run as the signed-in manager. $3 and $4 are branch-local date boundaries.
 const bounds=`
   select l.id,l.name,l.timezone,$3::date as start_day,$4::date as end_day,
