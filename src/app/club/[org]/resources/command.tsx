@@ -1,26 +1,28 @@
 'use client';
 
 import { type FormEvent, type ReactNode, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ConfirmDialog } from '@/app/components/confirm-dialog';
 import { errorMessage } from '@/lib/messages';
 
 export function ResourceCommand({ action, children, label, danger = false }: {
   action: string; children: ReactNode; label: string; danger?: boolean;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [confirmFields, setConfirmFields] = useState<URLSearchParams | null>(null);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function execute(fields: URLSearchParams) {
     if (pending) return;
-    const fields = new URLSearchParams();
-    new FormData(event.currentTarget).forEach((value, name) => fields.append(name, String(value)));
     setPending(true);
     setError(undefined);
     try {
       const response = await fetch(`/api/${action}`, { method: 'POST', headers: { Accept: 'application/json' }, body: fields });
       const data = await response.json();
       if (response.ok && typeof data.next === 'string' && data.next.startsWith('/club/')) {
-        location.assign(data.next);
+        router.push(data.next);
+        router.refresh();
         return;
       }
       setError(errorMessage(data.error ?? 'unavailable'));
@@ -31,11 +33,42 @@ export function ResourceCommand({ action, children, label, danger = false }: {
     }
   }
 
-  return <form className="local-form resource-command" method="post" action={`/api/${action}`} onSubmit={submit}>
-    {children}
-    {error && <p className="local-notice error" role="alert">{error}</p>}
-    <button className={`button ${danger ? 'danger-quiet' : 'primary'}`} disabled={pending}>{pending ? 'در حال ذخیره…' : label}</button>
-  </form>;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    if (!event.currentTarget.reportValidity()) return;
+    const fields = new URLSearchParams();
+    new FormData(event.currentTarget).forEach((value, name) => fields.append(name, String(value)));
+    if (danger) {
+      setConfirmFields(fields);
+      return;
+    }
+    void execute(fields);
+  }
+
+  return <>
+    <form className="local-form resource-command" method="post" action={`/api/${action}`} onSubmit={submit}>
+      {children}
+      {error && <p className="local-notice error" role="alert">{error}</p>}
+      <button className={`button ${danger ? 'danger-quiet' : 'primary'}`} disabled={pending}>{pending ? 'در حال ذخیره…' : label}</button>
+    </form>
+    {danger && (
+      <ConfirmDialog
+        isOpen={Boolean(confirmFields)}
+        isDestructive
+        title={label}
+        message="آیا از انجام این عملیات اطمینان دارید؟ این تغییر در سوابق باشگاه ثبت می‌شود."
+        confirmLabel={label}
+        cancelLabel="انصراف"
+        onConfirm={() => {
+          const fields = confirmFields;
+          setConfirmFields(null);
+          if (fields) void execute(fields);
+        }}
+        onCancel={() => setConfirmFields(null)}
+      />
+    )}
+  </>;
 }
 
 export function WeeklyTimes() {

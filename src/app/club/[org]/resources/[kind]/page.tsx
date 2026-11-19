@@ -9,12 +9,16 @@ export default async function Directory({ params, searchParams }: {
   params: Promise<{ org: string; kind: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { org, kind } = await params;
-  const user = await currentUser();
+  const [{ org, kind }, user] = await Promise.all([params, currentUser()]);
   if (!user) redirect('/');
-  if (!isResourceKind(kind) || !(await clubFor(user.id, org))) notFound();
-  const scope = await branches(user.id, org);
-  const filters = parseFilters(await searchParams, scope);
+  if (!isResourceKind(kind)) notFound();
+  const [club, scope, rawSearch] = await Promise.all([
+    clubFor(user.id, org),
+    branches(user.id, org),
+    searchParams,
+  ]);
+  if (!club) notFound();
+  const filters = parseFilters(rawSearch, scope);
   const result = await resourceList(user.id, org, kind, filters);
   const label = resourceKinds[kind];
   const href = (page: number) => `${resourcePath(org,kind)}?${new URLSearchParams({

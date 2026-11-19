@@ -210,9 +210,9 @@ function Rates({scope,data}:{scope:Scope;data:Awaited<ReturnType<typeof financeR
 export default async function FinanceOperations({params,searchParams}:{params:Promise<{org:string}>;searchParams:Promise<Filters>}) {
   const [{org},filters,user]=await Promise.all([params,searchParams,currentUser()]);
   if (!user) redirect('/');
-  const locations=await branches(user.id,org);
+  const [locations,currency]=await Promise.all([branches(user.id,org),clubCurrency(user.id,org)]);
   const branch=filters.branch ? locations.find(item=>item.id===filters.branch) : locations.find(item=>item.active) ?? locations[0];
-  if (!branch) notFound();
+  if (!branch || !currency) notFound();
   const tab=typeof filters.tab==='string' && Object.hasOwn(operationsTabs,filters.tab) ? filters.tab as OperationsTab : 'packages';
   const session=typeof filters.session==='string' && uuid(filters.session) ? filters.session : undefined;
   const selected=typeof filters.package==='string' && uuid(filters.package) ? filters.package : undefined;
@@ -220,8 +220,6 @@ export default async function FinanceOperations({params,searchParams}:{params:Pr
   const from=typeof filters.from==='string' && validCalendarDate(filters.from) ? filters.from : periodDates(today,'month').start;
   const to=typeof filters.to==='string' && validCalendarDate(filters.to) ? filters.to : today;
   const page=typeof filters.page==='string' && /^\d{1,5}$/.test(filters.page) ? Math.max(1,Number(filters.page)) : 1;
-  const currency=await clubCurrency(user.id,org);
-  if (!currency) notFound();
   const scope={org,branch,currency,today};
   let content;
   let hasNext=false;

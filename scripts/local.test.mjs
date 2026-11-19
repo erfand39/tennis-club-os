@@ -38,6 +38,11 @@ function sessionCookie(response) {
   assert.match(header, /SameSite=lax/i);
   return header.split(';', 1)[0];
 }
+function assertRial(html, formatted) {
+  const pair = `<bdi dir="ltr" class="money-digits">${formatted}</bdi><span class="money-unit">ریال</span>`;
+  assert.ok(html.includes(pair), `Expected ${formatted} ریال in the rendered financial summary.`);
+}
+
 function token(link) {
   const parsed = new URL(link);
   assert.equal(parsed.origin, origin);
@@ -511,8 +516,8 @@ test('finance issues and reconciles invoices with exact units and durable comman
   const listPath=`/club/${org}/finance?branch=${branch}&number=${issued.invoice_number}`;
   const list=await get(listPath,owner);
   assert.equal(list.status,200);
-  const summary=(await list.text()).replaceAll('<!-- -->','');
-  for (const label of ['۹۹٬۰۰۰ ریال','۳۰٬۰۰۰ ریال','۶۹٬۰۰۰ ریال','۱٬۳۳۱٬۰۰۰ ریال']) assert(summary.includes(label),label);
+  const summary=await list.text();
+  for (const amount of ['۹۹٬۰۰۰','۳۰٬۰۰۰','۶۹٬۰۰۰','۱٬۳۳۱٬۰۰۰']) assertRial(summary,amount);
   assert.match(summary,/دریافتی خالص به تفکیک زمین/);
   assert.match(summary,/سانس بدون مربی/);
   assert.match(await (await get(issue.next,owner)).text(),/رسید آزمون/);
@@ -576,9 +581,16 @@ test('training credit, expenses, coach settlement and special rates reconcile ag
   assert.equal(invoice.amount_minor,'12340');
   assert.match(await (await get(`/club/${org}/finance/${invoice.invoice_id}`,owner)).text(),/بستهٔ یک‌جلسه‌ای آزمون/);
   await error(await command('void',{invoice:invoice.invoice_id,reason:'تست'}),'training-cancel-first');
+  const studentPath=`/club/${org}/resources/students/${attended.student_id}`;
+  const student=await get(studentPath,owner);
+  assert.equal(student.status,200);
+  const studentBeforeUse=await student.text();
+  assert.match(studentBeforeUse,/بستهٔ یک‌جلسه‌ای آزمون/);
+  assertRial(studentBeforeUse,'۱۲٬۳۴۰');
 
   const credit={target:packageId,participant:attended.id,request:randomUUID()};
   const consumption=await ok(await command('training-redeem',credit));
+  assert.match(await (await get(studentPath,owner)).text(),/بسته پایان‌یافته/);
   assert.deepEqual(await ok(await command('training-redeem',credit)),consumption);
   await error(await command('training-redeem',{...credit,request:randomUUID()}),'training-duplicate');
   await error(await command('training-status',{target:packageId,status:'cancelled',reason:'تست'}),'training-used');
@@ -643,9 +655,9 @@ test('training credit, expenses, coach settlement and special rates reconcile ag
 
   const finance=await get(`/club/${org}/finance?branch=${branch}&from=${today}&to=${today}`,owner);
   assert.equal(finance.status,200);
-  const summary=(await finance.text()).replaceAll('<!-- -->','');
-  assert.match(summary,/۹۰٬۰۰۰ ریال/);
-  assert.match(summary,/۱۷۵٬۰۰۰ ریال/);
+  const summary=await finance.text();
+  assertRial(summary,'۹۰٬۰۰۰');
+  assertRial(summary,'۱۷۵٬۰۰۰');
   await ok(await command('expense-void',{target:expense.id,reason:'اصلاح هزینه'}));
   assert.match(await (await get(expenseLink.next,owner)).text(),/اصلاح هزینه/);
 });

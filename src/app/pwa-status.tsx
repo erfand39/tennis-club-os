@@ -1,31 +1,47 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 export function PwaStatus() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [available, setAvailable] = useState(true);
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const healthControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
-  async function check() {
-    setChecking(true);
+  const check = useCallback(async () => {
+    healthControllerRef.current?.abort();
     const controller = new AbortController();
+    healthControllerRef.current = controller;
+    setChecking(true);
     const timeout = window.setTimeout(() => controller.abort(), 4000);
     try {
       const response = await fetch('/api/health', { cache: 'no-store', signal: controller.signal });
-      setAvailable(response.ok);
+      if (mountedRef.current && healthControllerRef.current === controller) {
+        setAvailable(response.ok);
+      }
     } catch {
-      setAvailable(false);
+      if (mountedRef.current && healthControllerRef.current === controller) {
+        setAvailable(false);
+      }
     } finally {
       window.clearTimeout(timeout);
-      setChecking(false);
+      if (mountedRef.current && healthControllerRef.current === controller) {
+        setChecking(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     const refresh = () => { if (document.visibilityState === 'visible') void check(); };
     const timer = window.setInterval(refresh, 45000);
     window.addEventListener('online', refresh);
@@ -33,12 +49,16 @@ export function PwaStatus() {
     document.addEventListener('visibilitychange', refresh);
     if (!navigator.onLine) refresh();
     return () => {
+      mountedRef.current = false;
+      const activeHealthCheck = healthControllerRef.current;
+      healthControllerRef.current = null;
+      activeHealthCheck?.abort();
       window.clearInterval(timer);
       window.removeEventListener('online', refresh);
       window.removeEventListener('offline', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, []);
+  }, [check]);
 
   // Service Worker registration & updates
   useEffect(() => {
@@ -72,9 +92,11 @@ export function PwaStatus() {
 
   // 1-Click PWA Installation Hook
   useEffect(() => {
-    const handleBeforeInstall = (e: any) => {
-      e.preventDefault();
-      setInstallPrompt(e);
+    const handleBeforeInstall = (e: Event) => {
+      const promptEvent = e as BeforeInstallPromptEvent;
+      if (typeof promptEvent.prompt !== 'function') return;
+      promptEvent.preventDefault();
+      setInstallPrompt(promptEvent);
       setShowInstallBanner(true);
     };
 
@@ -126,9 +148,19 @@ export function PwaStatus() {
     {showInstallBanner && installPrompt && (
       <aside className="pwa-status pwa-install-banner" role="status">
         <span>نصب آسان سامانهٔ باشگاه تنیس سام روی دستگاه شما</span>
-        <button type="button" onClick={triggerInstall}>
-          نصب برنامه
-        </button>
+        <div className="pwa-banner-actions">
+          <button type="button" onClick={triggerInstall}>
+            نصب برنامه
+          </button>
+          <button
+            type="button"
+            className="pwa-dismiss-btn"
+            aria-label="بستن اعلان نصب"
+            onClick={() => setShowInstallBanner(false)}
+          >
+            بستن
+          </button>
+        </div>
       </aside>
     )}
   </>;

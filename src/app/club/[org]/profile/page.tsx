@@ -1,18 +1,19 @@
 import { notFound, redirect } from 'next/navigation';
 import { clubFor, displayName } from '@/lib/club';
 import { currentUser } from '@/lib/session';
-import { Notice } from '../../../ui';
+import { Notice } from '@/app/ui';
 
 export default async function Profile({ params, searchParams }: {
   params: Promise<{ org: string }>; searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
-  const { org } = await params;
-  const user = await currentUser();
+  const [{ org }, user] = await Promise.all([params, currentUser()]);
   if (!user) redirect('/');
-  const club = await clubFor(user.id, org);
+  const [club, name, feedback] = await Promise.all([
+    clubFor(user.id, org),
+    displayName(user.id),
+    searchParams,
+  ]);
   if (!club) notFound();
-  const name = await displayName(user.id);
-  const feedback = await searchParams;
   return <>
     <header className="local-heading"><h1>پروفایل من</h1></header>
     <section className="panel local-panel narrow">

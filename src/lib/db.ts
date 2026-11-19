@@ -1,5 +1,6 @@
 import 'server-only';
 import pg, { type PoolClient } from 'pg';
+import { cache } from 'react';
 import { databaseUrl, isDatabaseConfigured } from './config';
 
 let pool: pg.Pool | undefined;
@@ -9,7 +10,13 @@ export function database(): pg.Pool {
     throw new Error('Local PostgreSQL is not configured.');
   }
   if (!pool) {
-    pool = new pg.Pool({ connectionString: databaseUrl(), max: 10, connectionTimeoutMillis: 4000, statement_timeout: 12000 });
+    pool = new pg.Pool({
+      connectionString: databaseUrl(),
+      max: 15,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 4000,
+      statement_timeout: 12000,
+    });
     pool.on('error', () => console.warn('Local PostgreSQL connection closed.'));
   }
   return pool;
@@ -50,7 +57,7 @@ export async function isConfigured(): Promise<boolean | null> {
   }
 }
 
-export async function hasManagerAccess(userId: string): Promise<boolean> {
+export const hasManagerAccess = cache(async (userId: string): Promise<boolean> => {
   if (!isDatabaseConfigured()) return false;
   try {
     return await asUser(userId, async client => {
@@ -63,4 +70,4 @@ export async function hasManagerAccess(userId: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
+});

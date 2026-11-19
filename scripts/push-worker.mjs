@@ -15,13 +15,13 @@ try {
     let next=15000;
     try {
       const {rows}=await db.query('select * from tennis_runtime.claim_push_deliveries(4)');
-      for (const job of rows) {
+      await Promise.all(rows.map(async job=>{
         const outcome=await dispatchPush(job,settings);
         await db.query('select tennis_runtime.finish_push_delivery($1,$2,$3,$4)',[job.event_id,job.device_id,job.lease,outcome]);
-      }
+      }));
       if (rows.length===4) next=1000;
-    } catch {
-      console.warn('Push delivery will resume when the local database is available.');
+    } catch (error) {
+      console.warn('Push delivery will resume when the local database is available.', error instanceof Error ? error.message : String(error));
     }
     await sleep(next,undefined,{signal:stopped.signal}).catch(error=>{if (error.name!=='AbortError') throw error;});
   }

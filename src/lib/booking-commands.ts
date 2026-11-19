@@ -1,10 +1,10 @@
 import 'server-only';
 import { type PoolClient } from 'pg';
-import { uuid } from './club';
 import { asUser } from './db';
 import { InputError } from './input';
-import { asciiDigits, bookingKinds } from './resource-fields';
+import { bookingKinds } from './resource-fields';
 import { calendarDateTime, calendarPath } from './calendar-dates';
+import { isPgError, optionalUuid, type PgErrorLike, requireSafeInt, requireUuid } from './validation';
 
 const actions = ['booking-quote','booking-create','booking-move','booking-cancel'] as const;
 type BookingAction = typeof actions[number];
@@ -13,19 +13,10 @@ type Price = { amount: string; currency: string };
 export function isBookingAction(action: string): action is BookingAction {
   return actions.some(item => item === action);
 }
-function identifier(form: URLSearchParams, key: string, optional = false) {
-  const value = form.get(key) ?? '';
-  if (optional && !value) return null;
-  if (!uuid(value)) throw new InputError('booking-invalid');
-  return value;
-}
-function integer(form: URLSearchParams, key: string, min: number, max: number) {
-  const value = asciiDigits((form.get(key) ?? '').trim());
-  if (!/^\d{1,16}$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value)<min || Number(value)>max) {
-    throw new InputError('booking-invalid');
-  }
-  return Number(value);
-}
+const identifier = (form: URLSearchParams, key: string) => requireUuid(form.get(key), 'booking-invalid');
+const optionalIdentifier = (form: URLSearchParams, key: string) => optionalUuid(form.get(key), 'booking-invalid');
+const integer = (form: URLSearchParams, key: string, min: number, max: number) =>
+  requireSafeInt(form.get(key), 'booking-invalid', { min, max });
 
 async function startAt(db: PoolClient, org: string, location: string, form: URLSearchParams) {
   const value = calendarDateTime(form.get('start') ?? '');
@@ -48,8 +39,8 @@ async function readDraft(db: PoolClient, org: string, branch: string, form: URLS
   const minutes = integer(form,'minutes',1,1440);
   const end = new Date(start.getTime()+minutes*60000);
   const name = (form.get('booker') ?? '').trim();
-  const coach = identifier(form,'coach',true);
-  const student = identifier(form,'student',true);
+  const coach = optionalIdentifier(form,'coach');
+  const student = optionalIdentifier(form,'student');
   const capacity = kind === 'group' ? integer(form,'capacity',1,100) : null;
   if (kind === 'rental' ? (!name || name.length>120 || coach || student) : (name || !coach || (kind==='private' && !student))) {
     throw new InputError('booking-parties');
@@ -57,7 +48,7 @@ async function readDraft(db: PoolClient, org: string, branch: string, form: URLS
   return { court,kind,start,end,minutes,name:name || null,coach,student,capacity };
 }
 
-export function bookingError(failure: { code?: string; message?: string; constraint?: string }) {
+export function bookingError(failure: PgErrorLike) {
   if (failure.code === '42501') return new InputError('denied',403);
   if (failure.code === '40001' || failure.code === '40P01') return new InputError('booking-retry',409);
   const errors: Record<string,string> = {
@@ -142,6 +133,7 @@ export async function runBookingAction(action: BookingAction, form: URLSearchPar
     });
   } catch (failure) {
     if (failure instanceof InputError) throw failure;
-    throw bookingError(failure as Parameters<typeof bookingError>[0]) ?? failure;
+    if (isPgError(failure)) throw bookingError(failure) ?? failure;
+    throw failure;
   }
 }

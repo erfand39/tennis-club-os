@@ -5,21 +5,15 @@ import { attendanceStates, classesPath } from './class-fields';
 import { uuid } from './club';
 import { asUser } from './db';
 import { InputError } from './input';
+import { isPgError, requireSafeInt, requireUuid } from './validation';
 
 type ClassAction = 'class-enroll'|'class-withdraw'|'class-attendance';
 export function isClassAction(action:string): action is ClassAction {
   return action==='class-enroll' || action==='class-withdraw' || action==='class-attendance';
 }
-function id(values:URLSearchParams,key:string) {
-  const value=values.get(key) ?? '';
-  if (!uuid(value)) throw new InputError('attendance-invalid');
-  return value;
-}
-function revision(values:URLSearchParams,key:string) {
-  const value=values.get(key) ?? '';
-  if (!/^\d{1,16}$/.test(value) || !Number.isSafeInteger(Number(value))) throw new InputError('attendance-invalid');
-  return value;
-}
+const id = (values: URLSearchParams, key: string) => requireUuid(values.get(key), 'attendance-invalid');
+const revision = (values: URLSearchParams, key: string) =>
+  String(requireSafeInt(values.get(key), 'attendance-invalid'));
 function attendanceFrom(values:URLSearchParams) {
   const statuses:Record<string,string>={};
   for (const [key,value] of values) {
@@ -69,7 +63,7 @@ export async function runClassAction(action:ClassAction,form:URLSearchParams,use
     return classesPath(org,session,{saved:'1'});
   } catch (failure) {
     if (failure instanceof InputError) throw failure;
-    const db=failure as Parameters<typeof bookingError>[0];
+    if (!isPgError(failure)) throw failure;
     const errors:Record<string,[string,number?]> = {
       participant_already_enrolled:['attendance-duplicate',409], session_at_capacity:['attendance-full',409],
       session_not_open:['attendance-closed',409], participant_not_active:['attendance-closed',409],
@@ -77,7 +71,7 @@ export async function runClassAction(action:ClassAction,form:URLSearchParams,use
       attendance_reason_required:['attendance-reason'], attendance_roster_incomplete:['attendance-incomplete'],
       attendance_actual_invalid:['attendance-time'], invalid_slot:['attendance-time'], slot_crosses_local_day:['attendance-time'],
     };
-    const match=errors[db.message ?? ''];
-    throw match ? new InputError(...match) : bookingError(db) ?? failure;
+    const match=errors[failure.message ?? ''];
+    throw match ? new InputError(...match) : bookingError(failure) ?? failure;
   }
 }

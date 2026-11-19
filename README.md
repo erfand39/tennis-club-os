@@ -9,6 +9,7 @@
 <p>
   <a href="#preview">نمای برنامه</a> ·
   <a href="#features">قابلیت‌ها</a> ·
+  <a href="#latest-update">تغییرات نسخه</a> ·
   <a href="#quick-start">شروع سریع</a> ·
   <a href="#architecture">معماری</a> ·
   <a href="#guides">راهنماها</a> ·
@@ -21,7 +22,7 @@
   <img src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&amp;logo=react&amp;logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&amp;logo=postgresql&amp;logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Local-Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="نصب محلی با Docker" />
+  <img src="https://img.shields.io/badge/Local-macOS%20%7C%20Windows-174C3C?style=flat-square" alt="اجرای محلی روی مک و ویندوز" />
 </p>
 
 </div>
@@ -37,7 +38,7 @@
 
 <div align="center">
   <img src="docs/ui-v2/desktop.jpg" alt="داشبورد نسخهٔ دوم سام؛ برنامهٔ امروز، وضعیت زمین‌ها و دسترسی سریع به عملیات" width="100%" />
-  <p><sub>تصاویر از رابط واقعی برنامه با دادهٔ نمونه تهیه شده‌اند.</sub></p>
+  <p><sub>تصاویر نمای نسخهٔ ۲ را با دادهٔ نمونه نشان می‌دهند.</sub></p>
 </div>
 
 <table>
@@ -73,7 +74,7 @@
   <tr>
     <td valign="top">
       <h3>👥 مربیان، شاگردان و کلاس‌ها</h3>
-      <p>پروندهٔ افراد، ظرفیت کلاس و ثبت حضور، تأخیر، غیبت یا انصراف. دسترسی به برنامه و سوابق از همان پرونده.</p>
+      <p>پروندهٔ افراد، ظرفیت کلاس و ثبت حضور، تأخیر، غیبت یا انصراف. ماندهٔ بدهی و وضعیت بستهٔ آموزشی در پروندهٔ شاگرد دیده می‌شوند.</p>
     </td>
     <td valign="top">
       <h3>💳 امور مالی شعبه</h3>
@@ -104,12 +105,33 @@
 
 ورود به سامانه مخصوص **مالک و مدیران** است. مربیان و شاگردان پروندهٔ مدیریتی دارند و حساب ورود ندارند.
 
+<a id="latest-update"></a>
+## تغییرات این نسخه
+
+- **تاریخ شمسی** در تقویم سانس‌ها، کلاس‌ها، فیلتر مالی و گزارش‌ها. انتخابگر تاریخ از اسفند کبیسه و محدودیت بازهٔ مجاز پشتیبانی می‌کند.
+- **پروندهٔ مالی شاگرد** با ماندهٔ بدهی از فاکتورهای مرتبط و تعداد جلسات مصرف‌شده و باقی‌ماندهٔ بستهٔ آموزشی.
+- **تأیید عملیات حساس** در بخش‌هایی مانند ابطال هزینه و لغو سانس. فرم‌های به‌روزشده پس از ثبت، نتیجه را بدون بارگذاری کامل صفحه نشان می‌دهند.
+- **نمای موبایل و PWA** با نمایش شعبهٔ انتخاب‌شده، جست‌وجوی بهتر، صفحه‌های خطای فارسی و نمایش خطای اتصال هنگام پایان مهلت بررسی سرور.
+- **لایهٔ سرور** با کاهش بعضی پرس‌وجوهای تکراری، اعتبارسنجی درخواست‌ها و هماهنگی تمدید هم‌زمان نشست. GitHub Actions هم آزمون و ساخت نسخهٔ تولیدی را اجرا می‌کند.
+
 <a id="quick-start"></a>
 ## باشگاه را راه بیندازید
 
 ### اجرا روی مک و ویندوز بدون Docker
 
-بستهٔ متناسب با سیستم را باز کنید و فایل `Start-Sam-Tennis.command` در مک یا `Start-Sam-Tennis.bat` در ویندوز را اجرا کنید. راهنما نصب یک‌بارهٔ PostgreSQL 17، خروجی و وارد کردن اطلاعات بین دو سیستم و انتقال از نصب Docker را توضیح می‌دهد. [راهنمای اجرای بومی و انتقال داده](docs/desktop.md)
+۱. PostgreSQL 17 را یک‌بار نصب کنید. بستهٔ سام، برنامه، Node.js و سرویس ورود را همراه دارد.
+
+| سیستم | بستهٔ GitHub Actions | فایل اجرا |
+| --- | --- | --- |
+| مک Apple Silicon، از جمله M1 | `Sam-Tennis-macos-arm64` | `Start-Sam-Tennis.command` |
+| مک Intel | `Sam-Tennis-macos-x64` | `Start-Sam-Tennis.command` |
+| ویندوز ۶۴ بیتی | `Sam-Tennis-windows-x64` | `Start-Sam-Tennis.bat` |
+
+۲. در اجرای موفق مربوط به نسخهٔ موردنظر، بسته را از بخش **Artifacts** دریافت و هر دو لایهٔ ZIP را استخراج کنید. فایل اجرا را باز کنید و گزینهٔ اجرا را بزنید. [دریافت بسته‌ها](https://github.com/erfand39/tennis-club-os/actions/workflows/desktop-packages.yml)
+
+۳. مرورگر روی `127.0.0.1:3030` باز می‌شود. اگر پورت اشغال باشد، راه‌انداز از ۳۰۳۱ استفاده می‌کند. هنگام نصب تازه، کد ساخت حساب مالک در همان پنجرهٔ اجرا نمایش داده می‌شود. [راهنمای گام‌به‌گام](docs/desktop.md)
+
+**انتقال داده میان مک و ویندوز.** در سیستم مبدأ گزینهٔ «خروجی اطلاعات» را بزنید و فایل `.dump` را منتقل کنید. در مقصد «ورود اطلاعات» را بزنید و پس از بازیابی با حساب قبلی وارد شوید. بازیابی پس از اعتبارسنجی فایل، دیتابیس واردشده را فعال می‌کند. دیتابیس قبلی مقصد برای بازگشت با `rollback` در دسترس است. فایل خروجی نصب Docker از دستور `./scripts/local.sh backup` هم قابل ورود است. [راهنمای انتقال و بازگشت](docs/desktop.md#انتقال-اطلاعات)
 
 ### ۱. اجرا روی مک با Docker
 
@@ -167,11 +189,11 @@ SAM_LOCAL_PORT=3031 ./scripts/local.sh up
 ```mermaid
 flowchart TD
     A["مالک و مدیران؛ مرورگر یا PWA"] --> B["Next.js؛ رابط فارسی و API"]
-    subgraph Local["نصب محلی با Docker Compose"]
+    subgraph Local["نصب محلی روی رایانهٔ باشگاه"]
       B --> C["Supabase Auth؛ احراز هویت"]
       B --> D["PostgreSQL؛ داده‌ها و دسترسی شعبه"]
       C --> D
-      D --> E["حجم ماندگار اطلاعات"]
+      D --> E["ذخیره‌سازی ماندگار روی همان سیستم"]
     end
 ```
 
@@ -180,24 +202,24 @@ flowchart TD
 | رابط | Next.js 16، React 19، TypeScript؛ راست‌چین، وزیرمتن و تاریخ شمسی |
 | تعامل و نمایش | Lucide، Motion و اجزای اختصاصی برنامه |
 | داده | PostgreSQL؛ اطلاعات باشگاه، سانس‌ها، کلاس‌ها و عملیات مالی |
-| احراز هویت | Supabase Auth در شبکهٔ داخلی Docker |
-| اجرا | Docker Compose؛ نصب محلی و حجم ماندگار پایگاه داده |
+| احراز هویت | Supabase Auth محلی، با بررسی نقش مالک و مدیر شعبه |
+| اجرا | راه‌انداز بومی روی مک و ویندوز یا Docker Compose |
 | موبایل | PWA و Web Push اختیاری |
 
 ### اطلاعات، همراه نصب شما
 
-- داده‌های باشگاه در حجم ماندگار PostgreSQL ذخیره می‌شوند؛ تنظیمات همان نصب در `.local/secrets.env` قرار دارند.
+- در نصب بومی، اطلاعات باشگاه در پوشهٔ دادهٔ حساب سیستم ذخیره می‌شوند. در نصب Docker، اطلاعات در حجم ماندگار PostgreSQL و تنظیمات در `.local/secrets.env` قرار دارند.
 - اجرای محلی به حساب Supabase Cloud نیاز ندارد. نشانی پیش‌فرض فقط روی رایانهٔ میزبان باز می‌شود.
 - استفاده از آیفون یا دستگاه دیگر در شبکهٔ باشگاه به HTTPS خصوصی و معتبر نیاز دارد؛ جزئیات در [راهنمای PWA](docs/pwa.md) آمده است.
 - حالت آفلاین راهنمای عمومی نمایش می‌دهد؛ ثبت رزرو و عملیات مالی به اتصال سرور نیاز دارند.
-- هنگام انتقال نصب، پشتیبان پایگاه داده و نسخهٔ محافظت‌شدهٔ کلیدهای همان نصب را با هم نگه دارید. [راهنمای بازیابی](docs/recovery.md)
+- برای انتقال به نصب بومی از فایل پشتیبان `.dump` استفاده کنید. در مسیر بازیابی Docker، کلیدهای همان نصب را هم طبق راهنما نگه دارید. [راهنمای انتقال بومی](docs/desktop.md#انتقال-اطلاعات) · [راهنمای بازیابی Docker](docs/recovery.md)
 
 <a id="guides"></a>
 ## مسیرتان را پیدا کنید
 
 | می‌خواهید… | از اینجا شروع کنید |
 | --- | --- |
-| برنامه را نصب یا به‌روز کنید | [اجرای محلی](docs/local-run.md) |
+| برنامه را نصب یا به‌روز کنید | [مک و ویندوز بدون Docker](docs/desktop.md) · [نصب با Docker](docs/local-run.md) |
 | زمین، مربی و شاگرد تعریف کنید | [مدیریت پرونده‌ها و منابع](docs/resource-management.md) |
 | رزرو و زمان‌بندی را مدیریت کنید | [تقویم و سانس‌ها](docs/calendar.md) |
 | کلاس و حضور را ثبت کنید | [کلاس‌ها و حضور](docs/classes.md) |
@@ -216,10 +238,8 @@ flowchart TD
 ```sh
 npm ci
 npm run typecheck
+npm test
 npm run build
-npm run test:design
-npm run test:pwa
-npm run test:e2e
 ```
 
 برای اجرای توسعه، پس از تنظیم سرویس‌ها و متغیرهای محیطی مطابق راهنمای پروژه:
@@ -251,15 +271,15 @@ npm run dev
 **Sam Tennis Club** is a Persian-first club management application for owners and branch administrators, with court bookings, classes, attendance, branch finances and performance reports.
 
 - Daily dashboard with court availability and quick booking actions
-- Interactive day, week and month calendars
+- Interactive day, week and month calendars with Jalali date selection in scheduling and reports
 - Coach and student records, class capacity and attendance
-- Invoices, receipts, refunds, expenses, training packages and coach settlements
+- Invoices, receipts, refunds, expenses, training packages and coach settlements, with student balances and remaining sessions on each student record
 - Excel reports, CSV exports and print views for PDF
 - Persian RTL interface, Jalali dates, light/dark themes and mobile navigation
-- Local Docker deployment with PostgreSQL and Supabase Auth
+- Native macOS and Windows packages with a portable PostgreSQL backup, alongside Docker deployment
 - Installable PWA with optional Web Push; operational writes require a server connection
 
-**Local setup on macOS:** open Docker Desktop, clone the repository, run `./scripts/local.sh up`, then `./scripts/local.sh setup-code`. Open <http://127.0.0.1:3030> to create the owner account and first branch. No Supabase Cloud account is needed.
+Install PostgreSQL 17, extract the desktop package for your system, and open `Start-Sam-Tennis.command` on macOS or `Start-Sam-Tennis.bat` on Windows. Use the launcher menu to export or import a `.dump` when moving between systems. [Desktop setup and downloads](docs/desktop.md)
 
 [Setup guide (Persian)](docs/local-run.md) · [Architecture](docs/architecture.md) · [UI v2 showcase](docs/ui-v2/README.md)
 

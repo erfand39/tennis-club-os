@@ -1,7 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useId } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  JALALI_MONTH_NAMES,
+  type JalaliDate,
+  clampIsoDate,
+  formatToPersianDigits,
+  getJalaliMonthDays,
+  gregorianToJalali,
+  jalaliToGregorian,
+  toIsoDate,
+} from '@/lib/jalali';
 import { Icon } from './icon';
+
+export {
+  JALALI_MONTH_NAMES,
+  clampIsoDate,
+  formatToPersianDigits,
+  getJalaliMonthDays,
+  gregorianToJalali,
+  jalaliToGregorian,
+  toIsoDate,
+};
 
 export interface JalaliDatePickerProps {
   name: string;
@@ -26,76 +46,14 @@ export interface JalaliDateTimePickerProps {
   className?: string;
 }
 
-// Jalali month names in Persian
-export const JALALI_MONTH_NAMES = [
-  'فروردین', 'اردیبهشت', 'خرداد',
-  'تیر', 'مرداد', 'شهریور',
-  'مهر', 'آبان', 'آذر',
-  'دی', 'بهمن', 'اسفند'
-] as const;
-
-export function gregorianToJalali(dateStr: string): { year: number; month: number; day: number } {
-  const d = new Date(dateStr.slice(0, 10) + 'T12:00:00Z');
-  if (isNaN(d.getTime())) {
-    const today = new Date();
-    return gregorianToJalali(today.toISOString().slice(0, 10));
-  }
-  const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'UTC',
-  }).formatToParts(d);
-
-  const y = parts.find(p => p.type === 'year')?.value ?? '1404';
-  const m = parts.find(p => p.type === 'month')?.value ?? '01';
-  const day = parts.find(p => p.type === 'day')?.value ?? '01';
-
-  return {
-    year: parseInt(y, 10),
-    month: parseInt(m, 10),
-    day: parseInt(day, 10),
-  };
+function normalizeDateBound(bound?: string): string | undefined {
+  if (!bound) return undefined;
+  const dateOnly = bound.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : undefined;
 }
 
-export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: number; gm: number; gd: number } {
-  let gy: number;
-  if (jy > 979) {
-    gy = 1600;
-    jy -= 979;
-  } else {
-    gy = 621;
-  }
-  let days = 365 * jy + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) + 78 + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
-  gy += 400 * Math.floor(days / 146097);
-  days %= 146097;
-  if (days > 36524) {
-    gy += 100 * Math.floor(--days / 36524);
-    days %= 36524;
-    if (days >= 365) days++;
-  }
-  gy += 4 * Math.floor(days / 1461);
-  days %= 1461;
-  if (days > 365) {
-    gy += Math.floor((days - 1) / 365);
-    days = (days - 1) % 365;
-  }
-  let gd = days + 1;
-  const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  let gm: number;
-  for (gm = 0; gm < 13 && gd > sal_a[gm]; gm++) gd -= sal_a[gm];
-  return { gy, gm, gd };
-}
-
-export function formatToPersianDigits(n: number | string): string {
-  const f = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-  return String(n).replace(/[0-9]/g, d => f[+d]);
-}
-
-export function toIsoDate(gy: number, gm: number, gd: number): string {
-  const m = String(gm).padStart(2, '0');
-  const d = String(gd).padStart(2, '0');
-  return `${gy}-${m}-${d}`;
+function formatJalaliLabel(j: JalaliDate): string {
+  return `${formatToPersianDigits(j.year)}/${formatToPersianDigits(String(j.month).padStart(2, '0'))}/${formatToPersianDigits(String(j.day).padStart(2, '0'))}`;
 }
 
 export function JalaliDatePicker({
@@ -111,52 +69,124 @@ export function JalaliDatePicker({
 }: JalaliDatePickerProps): React.JSX.Element {
   const generatedId = useId();
   const inputId = explicitId || generatedId;
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const initialIso = defaultValue || todayIso;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const minDate = normalizeDateBound(min);
+  const maxDate = normalizeDateBound(max);
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const initialIso = useMemo(() => {
+    if (defaultValue === '' && !required) return '';
+    return clampIsoDate(defaultValue || todayIso, minDate, maxDate);
+  }, [defaultValue, maxDate, minDate, required, todayIso]);
 
   const [isoDate, setIsoDate] = useState<string>(initialIso);
-  const [jalali, setJalali] = useState(gregorianToJalali(initialIso));
+  const [jalali, setJalali] = useState<JalaliDate>(() =>
+    gregorianToJalali(initialIso || clampIsoDate(todayIso, minDate, maxDate)),
+  );
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    if (defaultValue) {
-      setIsoDate(defaultValue);
-      setJalali(gregorianToJalali(defaultValue));
+    if (defaultValue !== undefined) {
+      if (defaultValue === '' && !required) {
+        setIsoDate('');
+        setJalali(gregorianToJalali(clampIsoDate(todayIso, minDate, maxDate)));
+      } else {
+        const clamped = clampIsoDate(defaultValue || todayIso, minDate, maxDate);
+        setIsoDate(clamped);
+        setJalali(gregorianToJalali(clamped));
+      }
     }
-  }, [defaultValue]);
+  }, [defaultValue, maxDate, minDate, required, todayIso]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isOpen]);
+
+  const commitDate = (nextIso: string, closePopover = false) => {
+    const clamped = clampIsoDate(nextIso, minDate, maxDate);
+    setIsoDate(clamped);
+    setJalali(gregorianToJalali(clamped));
+    if (closePopover) {
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    }
+    onChange?.(clamped);
+  };
 
   const handleSelectDay = (day: number) => {
     const { gy, gm, gd } = jalaliToGregorian(jalali.year, jalali.month, day);
-    const newIso = toIsoDate(gy, gm, gd);
-    setIsoDate(newIso);
-    setJalali({ ...jalali, day });
-    setIsOpen(false);
-    onChange?.(newIso);
+    commitDate(toIsoDate(gy, gm, gd), true);
   };
 
   const handleMonthChange = (month: number) => {
-    const { gy, gm, gd } = jalaliToGregorian(jalali.year, month, Math.min(jalali.day, month > 6 ? 30 : 31));
-    const newIso = toIsoDate(gy, gm, gd);
-    setIsoDate(newIso);
-    setJalali({ ...jalali, month });
-    onChange?.(newIso);
+    const maxDay = getJalaliMonthDays(jalali.year, month);
+    const nextDay = Math.min(jalali.day, maxDay);
+    const { gy, gm, gd } = jalaliToGregorian(jalali.year, month, nextDay);
+    commitDate(toIsoDate(gy, gm, gd));
   };
 
   const handleYearChange = (year: number) => {
-    const { gy, gm, gd } = jalaliToGregorian(year, jalali.month, jalali.day);
-    const newIso = toIsoDate(gy, gm, gd);
-    setIsoDate(newIso);
-    setJalali({ ...jalali, year });
-    onChange?.(newIso);
+    const maxDay = getJalaliMonthDays(year, jalali.month);
+    const nextDay = Math.min(jalali.day, maxDay);
+    const { gy, gm, gd } = jalaliToGregorian(year, jalali.month, nextDay);
+    commitDate(toIsoDate(gy, gm, gd));
   };
 
-  const formattedJalali = `${formatToPersianDigits(jalali.year)}/${formatToPersianDigits(String(jalali.month).padStart(2, '0'))}/${formatToPersianDigits(String(jalali.day).padStart(2, '0'))}`;
+  const handleStepMonth = (delta: -1 | 1) => {
+    let nextMonth = jalali.month + delta;
+    let nextYear = jalali.year;
+    if (nextMonth < 1) {
+      nextMonth = 12;
+      nextYear -= 1;
+    } else if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+    const maxDay = getJalaliMonthDays(nextYear, nextMonth);
+    const nextDay = Math.min(jalali.day, maxDay);
+    const { gy, gm, gd } = jalaliToGregorian(nextYear, nextMonth, nextDay);
+    commitDate(toIsoDate(gy, gm, gd));
+  };
+
+  const daysInMonth = getJalaliMonthDays(jalali.year, jalali.month);
+  const currentJalaliYear = useMemo(() => gregorianToJalali(todayIso).year, [todayIso]);
+  const yearOptions = useMemo(() => {
+    const list: number[] = [];
+    const minYear = Math.min(currentJalaliYear - 15, jalali.year);
+    const maxYear = Math.max(currentJalaliYear + 5, jalali.year);
+    for (let y = minYear; y <= maxYear; y++) list.push(y);
+    return list;
+  }, [currentJalaliYear, jalali.year]);
+
+  const formattedJalali = isoDate ? formatJalaliLabel(jalali) : '';
+  const todayOutOfRange = Boolean((minDate && todayIso < minDate) || (maxDate && todayIso > maxDate));
 
   return (
     <div
-      className={`jalali-datepicker-container ${className}`}
+      ref={containerRef}
+      className={`jalali-datepicker-container ${className}`.trim()}
       data-jalali-picker="true"
-      data-jalali-date={formattedJalali}
+      data-jalali-date={formattedJalali || undefined}
     >
       {label && (
         <label htmlFor={inputId} className="field-label">
@@ -176,30 +206,36 @@ export function JalaliDatePicker({
 
       <div className="jalali-input-wrapper">
         <button
+          ref={triggerRef}
           type="button"
           className="jalali-display-button button subtle"
           aria-expanded={isOpen}
           aria-haspopup="dialog"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsOpen(prev => !prev)}
         >
           <Icon name="calendar" size={16} />
-          <span className="jalali-date-text">{formattedJalali}</span>
-          <span className="jalali-month-name">({JALALI_MONTH_NAMES[jalali.month - 1]})</span>
+          {isoDate ? (
+            <>
+              <span className="jalali-date-text">{formattedJalali}</span>
+              <span className="jalali-month-name">({JALALI_MONTH_NAMES[jalali.month - 1]})</span>
+            </>
+          ) : (
+            <span className="jalali-date-text">انتخاب تاریخ</span>
+          )}
         </button>
       </div>
 
       {isOpen && (
         <div className="jalali-popover panel" role="dialog" aria-label="انتخاب تاریخ شمسی">
           <div className="jalali-header">
-            <select
-              aria-label="انتخاب سال"
-              value={jalali.year}
-              onChange={e => handleYearChange(parseInt(e.target.value, 10))}
+            <button
+              type="button"
+              className="jalali-nav-btn button subtle"
+              aria-label="ماه قبل"
+              onClick={() => handleStepMonth(-1)}
             >
-              {[jalali.year - 2, jalali.year - 1, jalali.year, jalali.year + 1, jalali.year + 2].map(y => (
-                <option key={y} value={y}>{formatToPersianDigits(y)}</option>
-              ))}
-            </select>
+              <Icon name="chevron-right" size={14} />
+            </button>
             <select
               aria-label="انتخاب ماه"
               value={jalali.month}
@@ -209,20 +245,55 @@ export function JalaliDatePicker({
                 <option key={idx + 1} value={idx + 1}>{m}</option>
               ))}
             </select>
+            <select
+              aria-label="انتخاب سال"
+              value={jalali.year}
+              onChange={e => handleYearChange(parseInt(e.target.value, 10))}
+            >
+              {yearOptions.map(y => (
+                <option key={y} value={y}>{formatToPersianDigits(y)}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="jalali-nav-btn button subtle"
+              aria-label="ماه بعد"
+              onClick={() => handleStepMonth(1)}
+            >
+              <Icon name="chevron-left" size={14} />
+            </button>
           </div>
 
           <div className="jalali-days-grid" role="grid" aria-label="روزهای ماه">
-            {Array.from({ length: jalali.month <= 6 ? 31 : jalali.month <= 11 ? 30 : 29 }, (_, i) => i + 1).map(d => (
-              <button
-                key={d}
-                type="button"
-                className={`jalali-day-cell ${d === jalali.day ? 'is-selected' : ''}`}
-                onClick={() => handleSelectDay(d)}
-                aria-selected={d === jalali.day}
-              >
-                {formatToPersianDigits(d)}
-              </button>
-            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+              const { gy, gm, gd } = jalaliToGregorian(jalali.year, jalali.month, d);
+              const cellIso = toIsoDate(gy, gm, gd);
+              const disabled = Boolean((minDate && cellIso < minDate) || (maxDate && cellIso > maxDate));
+              const isSelected = Boolean(isoDate && cellIso === isoDate);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={disabled}
+                  className={`jalali-day-cell ${isSelected ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}
+                  onClick={() => handleSelectDay(d)}
+                  aria-selected={isSelected}
+                >
+                  {formatToPersianDigits(d)}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="jalali-footer">
+            <button
+              type="button"
+              className="button subtle jalali-today-btn"
+              disabled={todayOutOfRange}
+              onClick={() => commitDate(todayIso, true)}
+            >
+              امروز
+            </button>
           </div>
         </div>
       )}
@@ -233,6 +304,7 @@ export function JalaliDatePicker({
 export function JalaliDateTimePicker({
   name,
   defaultValue,
+  min,
   required = false,
   label,
   id: explicitId,
@@ -244,6 +316,7 @@ export function JalaliDateTimePicker({
   const initialIso = defaultValue || new Date().toISOString().slice(0, 16);
   const initialDate = initialIso.slice(0, 10);
   const initialTime = initialIso.slice(11, 16) || '08:00';
+  const minDate = normalizeDateBound(min);
 
   const [datePart, setDatePart] = useState(initialDate);
   const [timePart, setTimePart] = useState(initialTime);
@@ -260,16 +333,17 @@ export function JalaliDateTimePicker({
   };
 
   return (
-    <div className={`jalali-datetime-picker ${className}`}>
+    <div className={`jalali-datetime-picker ${className}`.trim()}>
       {label && (
         <label htmlFor={inputId} className="field-label">
           {label} {required && <span aria-hidden="true">*</span>}
         </label>
       )}
-      <div className="datetime-fields" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div className="datetime-fields">
         <JalaliDatePicker
           name={`${name}_date_shim`}
           defaultValue={datePart}
+          min={minDate}
           required={required}
           onChange={handleDateChange}
         />

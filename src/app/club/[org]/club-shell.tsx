@@ -1,23 +1,26 @@
-import type { ReactNode } from 'react';
-import type { Club } from '@/lib/club';
+import { type ReactNode, Suspense } from 'react';
+import type { Branch, Club } from '@/lib/club';
 import { roles } from '@/lib/roles';
 import { resourcePath } from '@/lib/resource-fields';
-import { Brand, Logout } from '../../ui';
+import { Brand, Logout } from '@/app/ui';
 import { ClubNav } from './nav';
 import { ClubSearch } from './search';
-import { ClubPageMotion } from '../../motion-ui';
+import { ClubPageMotion } from '@/app/motion-ui';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { BottomNav } from '@/app/components/bottom-nav';
+import { MobileBranchBadge } from './mobile-branch-badge';
 
-export function ClubShell({ children, org, club, name, activeBranchName }: {
-  children: ReactNode; org: string; club: Club; name: string; activeBranchName: string;
+export function ClubShell({ children, org, club, name, activeBranchName, branches = [] }: {
+  children: ReactNode; org: string; club: Club; name: string; activeBranchName: string; branches?: Branch[];
 }) {
   return <div className="local-shell">
     <a className="skip-link" href="#club-main">رفتن به محتوای اصلی</a>
     <header className="mobile-header" aria-label="هدر همراه باشگاه">
       <Brand href={`/club/${org}`} />
       <div className="mobile-header-meta">
-        <span className="mobile-branch-badge">{activeBranchName}</span>
+        <Suspense fallback={<span className="mobile-branch-badge">{activeBranchName}</span>}>
+          <MobileBranchBadge branches={branches} fallbackName={activeBranchName} />
+        </Suspense>
       </div>
     </header>
 
@@ -46,12 +49,14 @@ export function ClubShell({ children, org, club, name, activeBranchName }: {
 
     <main id="club-main" tabIndex={-1} className="local-content"><ClubPageMotion>{children}</ClubPageMotion></main>
 
-    <BottomNav
-      org={org}
-      userName={name || 'حساب باشگاه'}
-      roleTitle={roles[club.role]}
-      tools={<><ClubSearch org={org} /><ThemeToggle /></>}
-      isOwner={club.role === 'owner'}
-    />
+    <Suspense fallback={null}>
+      <BottomNav
+        org={org}
+        userName={name || 'حساب باشگاه'}
+        roleTitle={roles[club.role]}
+        tools={<><ClubSearch org={org} mode="mobile" /><ThemeToggle /></>}
+        isOwner={club.role === 'owner'}
+      />
+    </Suspense>
   </div>;
 }

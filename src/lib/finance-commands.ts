@@ -2,20 +2,16 @@ import 'server-only';
 import { bookingError } from './booking-commands';
 import { isClubFinanceCommand } from './club-finance-fields';
 import { runClubFinanceAction } from './club-finance-commands';
-import { uuid } from './club';
 import { asUser } from './db';
 import { financeCommands,financePath,isFinanceCommand,paymentMethods,type FinanceCommandName } from './finance-fields';
 import { InputError } from './input';
 import { parseMinor } from './money';
+import { isPgError, requireUuid } from './validation';
 
 type FinanceAction=FinanceCommandName|'finance-operation';
 export const isFinanceAction=(value:string):value is FinanceAction=>isFinanceCommand(value)||value==='finance-operation';
 
-function id(form:URLSearchParams,key:string) {
-  const value=form.get(key) ?? '';
-  if (!uuid(value)) throw new InputError('finance-invalid');
-  return value;
-}
+const id = (form: URLSearchParams, key: string) => requireUuid(form.get(key), 'finance-invalid');
 function optionalText(form:URLSearchParams,key:string,limit:number) {
   const value=(form.get(key) ?? '').trim();
   if (value.length>limit) throw new InputError('finance-invalid');
@@ -81,7 +77,7 @@ export async function runFinanceAction(action:FinanceAction,form:URLSearchParams
     });
   } catch (failure) {
     if (failure instanceof InputError) throw failure;
-    const db=failure as Parameters<typeof bookingError>[0];
+    if (!isPgError(failure)) throw failure;
     const errors:Record<string,[string,number?]>={
       booking_not_invoiceable:['finance-not-invoiceable',409],booking_already_invoiced:['finance-already-invoiced',409],
       invalid_invoice_discount:['finance-discount'],invoice_discount_exceeds_price:['finance-discount-cap',409],
@@ -95,10 +91,10 @@ export async function runFinanceAction(action:FinanceAction,form:URLSearchParams
       club_finance_reason:['finance-reason'], club_finance_invalid:['club-finance-invalid'],
       invalid_refund:['finance-invalid'],invalid_payment:['finance-invalid'],request_payload_mismatch:['finance-request',409],
     };
-    if (db.code==='23P01' && action==='finance-rate-special') throw new InputError('rate-special-conflict',409);
-    const match=errors[db.message ?? ''];
+    if (failure.code==='23P01' && action==='finance-rate-special') throw new InputError('rate-special-conflict',409);
+    const match=errors[failure.message ?? ''];
     if (match) throw new InputError(...match);
-    if (isClubFinanceCommand(action) && (db.code?.startsWith('22') || db.code?.startsWith('23'))) throw new InputError('club-finance-invalid');
-    throw bookingError(db) ?? failure;
+    if (isClubFinanceCommand(action) && (failure.code?.startsWith('22') || failure.code?.startsWith('23'))) throw new InputError('club-finance-invalid');
+    throw bookingError(failure) ?? failure;
   }
 }

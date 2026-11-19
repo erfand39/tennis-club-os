@@ -18,6 +18,8 @@ export const weekdays = [
   [6, 'شنبه'], [7, 'یکشنبه'], [1, 'دوشنبه'], [2, 'سه‌شنبه'], [3, 'چهارشنبه'], [4, 'پنجشنبه'], [5, 'جمعه'],
 ] as const;
 export const bookingKinds = { rental: 'اجارهٔ زمین', private: 'تمرین خصوصی', group: 'کلاس گروهی' } as const;
+export type BookingKind = keyof typeof bookingKinds;
+export type CalendarCourt = { id: string; name: string; surface: string; status: 'active' | 'inactive' | 'archived' };
 export const bookingStatuses = { confirmed: 'تأییدشده', cancelled: 'لغوشده' } as const;
 export const attendanceStatuses = { present: 'حاضر', late: 'با تأخیر', absent: 'غایب', excused: 'موجه' } as const;
 export const resourceActions = { created: 'ثبت پرونده', edited: 'ویرایش پرونده', archived: 'آرشیو', hours: 'تغییر ساعات هفتگی', rate: 'ثبت تعرفه' } as const;

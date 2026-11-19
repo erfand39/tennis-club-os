@@ -1,33 +1,26 @@
 import 'server-only';
 import { validCalendarDate } from './calendar-dates';
-import { uuid } from './club';
 import { clubFinanceCommands,commandTab,expenseCategories,operationsPath,type ClubFinanceCommand } from './club-finance-fields';
 import { type PoolClient } from 'pg';
 import { paymentMethods } from './finance-fields';
 import { InputError } from './input';
 import { parseMinor } from './money';
 import { asciiDigits } from './resource-fields';
+import { requireSafeInt, requireUuid } from './validation';
 
 function field(form:URLSearchParams,key:string,max:number,required=true) {
   const value=(form.get(key) ?? '').trim();
   if (value.length>max || (required && !value)) throw new InputError('club-finance-invalid');
   return value;
 }
-function id(form:URLSearchParams,key:string) {
-  const value=field(form,key,36);
-  if (!uuid(value)) throw new InputError('club-finance-invalid');
-  return value;
-}
+const id = (form: URLSearchParams, key: string) => requireUuid(form.get(key), 'club-finance-invalid');
 function date(form:URLSearchParams,key:string) {
   const value=asciiDigits(field(form,key,10));
   if (!validCalendarDate(value)) throw new InputError('club-finance-date');
   return value;
 }
-function number(form:URLSearchParams,key:string,low:number,high:number) {
-  const value=asciiDigits(field(form,key,4));
-  if (!/^\d{1,4}$/.test(value) || +value<low || +value>high) throw new InputError('club-finance-invalid');
-  return +value;
-}
+const number = (form: URLSearchParams, key: string, low: number, high: number) =>
+  requireSafeInt(form.get(key), 'club-finance-invalid', { min: low, max: high, maxDigits: 4 });
 function minute(form:URLSearchParams,key:string) {
   const text=asciiDigits(field(form,key,5));
   if (!/^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/.test(text)) throw new InputError('club-finance-invalid');

@@ -6,6 +6,7 @@ import { classList } from '@/lib/classes';
 import { branches } from '@/lib/club';
 import { bookingKinds } from '@/lib/resource-fields';
 import { currentUser } from '@/lib/session';
+import { JalaliDatePicker } from '@/app/components/jalali-datepicker';
 import { LocalTimeRange } from '../calendar/booking-ui';
 
 export default async function ClassesPage({params,searchParams}:{
@@ -36,7 +37,7 @@ export default async function ClassesPage({params,searchParams}:{
         <label className="field"><span>شعبه</span><select name="branch" defaultValue={branch.id}>
           {scope.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label>
-        <label className="field"><span>تاریخ شروع</span><input type="date" name="date" dir="ltr" defaultValue={date} required /></label>
+        <div className="field"><span>تاریخ شروع</span><JalaliDatePicker name="date" defaultValue={date} required /></div>
         <label className="field"><span>بازه</span><select name="span" defaultValue={span}>
           <option value="week">۷ روز</option><option value="day">یک روز</option>
         </select></label>

@@ -147,7 +147,7 @@ case "${1:-up}" in
     mkdir -p .local/backups
     temp=$(mktemp "$root/.local/backups/.backup.XXXXXX")
     trap 'rm -f "$temp"' EXIT HUP INT TERM
-    compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -h 127.0.0.1 -U postgres -d postgres --format=custom' > "$temp"
+    compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -h 127.0.0.1 -U postgres -d postgres --format=custom --exclude-table-data=tennis_runtime.web_sessions' > "$temp"
     suffix=${temp##*.}
     final="$root/.local/backups/sam-$(date -u '+%Y%m%dT%H%M%SZ')-$suffix.dump"
     mv "$temp" "$final"

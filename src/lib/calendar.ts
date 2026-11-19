@@ -1,10 +1,9 @@
 import 'server-only';
 import { type Branch } from './club';
 import { asUser } from './db';
-import { type bookingKinds } from './resource-fields';
+import { type BookingKind, type CalendarCourt } from './resource-fields';
 
-export type BookingKind = keyof typeof bookingKinds;
-export type CalendarCourt = { id: string; name: string; surface: string; status: 'active'|'inactive'|'archived' };
+export type { BookingKind, CalendarCourt };
 export type Booking = {
   id: string; location_id: string; court_id: string; court: string; starts_at: Date; ends_at: Date; timezone: string;
   local_day: string; kind: BookingKind; status: 'confirmed'|'cancelled'; booker_name: string | null;
@@ -115,28 +114,33 @@ type BookingDetail = Booking & {
 };
 type History = { action: string; created_at: Date; old_start: Date|null; new_start: Date|null };
 export function calendarBooking(user: string, org: string, branches: Branch[], id: string) {
+  const branchIds = branches.map(item => item.id);
+  if (!branchIds.length) return Promise.resolve(null);
   return asUser(user, async db => {
-    const location = (await db.query<{ location_id: string }>(
-      'select location_id from public.bookings where organization_id=$1 and id=$2',[org,id])).rows[0]?.location_id;
-    const branch = branches.find(item => item.id === location);
-    if (!branch) return null;
     const detail = (await db.query<BookingDetail>(`
-      select ${bookingColumns},b.revision,b.cancellation_reason,b.cancelled_at,p.amount_minor as amount,p.currency,i.invoice_id as active_invoice_id,
+      select b.id,b.location_id,b.court_id,c.name as court,b.starts_at,b.ends_at,b.timezone,
+        timezone(b.timezone,b.starts_at)::date::text as local_day,b.kind,b.status,b.booker_name,
+        cp.name as coach,s.id as session_id,s.status as session_status,s.capacity,b.revision::text as revision,
+        b.cancellation_reason,b.cancelled_at,p.amount_minor as amount,p.currency,i.invoice_id as active_invoice_id,
         (b.kind='private' and exists(select from public.session_participants pp join public.training_uses u on u.participant_id=pp.id
           where pp.session_id=s.id and u.reversed_at is null)) as covered_by_training
       ${bookingTables}
       left join public.booking_prices p on (p.organization_id,p.location_id,p.booking_id)=(b.organization_id,b.location_id,b.id)
       left join public.invoice_items i on (i.organization_id,i.location_id,i.booking_id)=(b.organization_id,b.location_id,b.id) and i.active
-      where b.organization_id=$1 and b.location_id=$2 and b.id=$4
-    `,[org,branch.id,branch.timezone,id])).rows[0];
+      where b.organization_id=$1 and b.location_id=any($2::uuid[]) and b.id=$3
+    `,[org,branchIds,id])).rows[0];
     if (!detail) return null;
-    const students = (await db.query<Person>(`
-      select p.id,p.name as name from public.session_participants j
-      join public.sessions s on (s.organization_id,s.location_id,s.id)=(j.organization_id,j.location_id,j.session_id)
-      join public.student_profiles p on (p.organization_id,p.id)=(j.organization_id,j.student_id)
-      where s.organization_id=$1 and s.location_id=$2 and s.booking_id=$3 and j.withdrawn_at is null order by p.name,p.id
-    `,[org,branch.id,id])).rows;
-    const history = (await db.query<History>('select * from public.calendar_booking_history($1,$2,$3)',[org,branch.id,id])).rows;
-    return { detail,branch,students,history };
+    const branch = branches.find(item => item.id === detail.location_id);
+    if (!branch) return null;
+    const [studentsResult, historyResult] = await Promise.all([
+      db.query<Person>(`
+        select p.id,p.name as name from public.session_participants j
+        join public.sessions s on (s.organization_id,s.location_id,s.id)=(j.organization_id,j.location_id,j.session_id)
+        join public.student_profiles p on (p.organization_id,p.id)=(j.organization_id,j.student_id)
+        where s.organization_id=$1 and s.location_id=$2 and s.booking_id=$3 and j.withdrawn_at is null order by p.name,p.id
+      `,[org,branch.id,id]),
+      db.query<History>('select * from public.calendar_booking_history($1,$2,$3)',[org,branch.id,id]),
+    ]);
+    return { detail,branch,students: studentsResult.rows,history: historyResult.rows };
   });
 }

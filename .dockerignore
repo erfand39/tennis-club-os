@@ -9,3 +9,8 @@ scripts/*.test.mjs
 scripts/fixtures
 scripts/build-site.mjs
 site
+tests
+docs
+.github
+.openai
+*.md

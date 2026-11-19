@@ -1,7 +1,7 @@
 import 'server-only';
 import { localOrigin } from './local-origin';
 
-const DEFAULT_ORIGIN = 'http://0.0.0.0:3000';
+const DEFAULT_ORIGIN = 'http://127.0.0.1:3030';
 const DEFAULT_AUTH_URL = 'http://127.0.0.1:9999';
 function requiredSecret(name: string): string {
   const value = process.env[name];
